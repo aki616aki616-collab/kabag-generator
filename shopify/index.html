@@ -1685,10 +1685,17 @@ function generateHTMLCode() {
   scroll-snap-align: start;
   border-radius: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 .kabag-slider-item img {
   width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  object-position: center center;
   display: block;
+  background: #fff;
 }
 .kabag-slider-caption {
   text-align: center;
@@ -1696,34 +1703,10 @@ function generateHTMLCode() {
   font-size: 0.95em;
   color: #333;
   background: #fff;
-}
-/* サムネイル一覧 */
-.kabag-slider-thumbs {
+  min-height: 80px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
   justify-content: center;
-  padding: 15px 10px;
-  background: rgba(255,255,255,0.95);
-}
-.kabag-slider-thumbs img {
-  width: 60px;
-  height: 60px;
-  object-fit: cover;
-  display: block;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: opacity 0.3s, transform 0.3s;
-  border: 2px solid transparent;
-  border-radius: 4px;
-}
-.kabag-slider-thumbs img:hover {
-  opacity: 1;
-  transform: scale(1.05);
-}
-.kabag-slider-thumbs img.active {
-  opacity: 1;
-  border-color: #F6A800;
 }
 
 /* ========== メインビジュアル用タイトル ========== */
@@ -1904,6 +1887,8 @@ ${enableReviewTab ? `    <label for="kabag-tab3">${reviewTabLabel}</label>` : ''
         <span class="kabag-slider-arrow kabag-slider-arrow-left">＜</span>
         <span class="kabag-slider-arrow kabag-slider-arrow-right">＞</span>
         <div class="kabag-slider-container">
+          <!-- ダミー要素（非表示） -->
+          <div class="kabag-slider-item" style="display: none;"></div>
 `;
     
     sliderItems.forEach((item, index) => {
@@ -1915,50 +1900,7 @@ ${enableReviewTab ? `    <label for="kabag-tab3">${reviewTabLabel}</label>` : ''
     
     html += `        </div>
       </div>
-      <div class="kabag-slider-thumbs">
-`;
-    
-    sliderItems.forEach((item, index) => {
-      const activeClass = index === 0 ? ' class="active"' : '';
-      html += `        <img src="${item.img}" alt="サムネイル${index + 1}" data-index="${index}"${activeClass}>\n`;
-    });
-    
-    html += `      </div>
     </div>
-    <scr` + `ipt>
-    (function(){
-      var container = document.querySelector('.kabag-slider-container');
-      var thumbs = document.querySelectorAll('.kabag-slider-thumbs img');
-      if (!container || !thumbs.length) return;
-      
-      // サムネイルクリックでスクロール
-      thumbs.forEach(function(thumb) {
-        thumb.addEventListener('click', function() {
-          var index = parseInt(this.getAttribute('data-index'));
-          var target = document.getElementById('slide-' + index);
-          if (target) {
-            container.scrollTo({ left: target.offsetLeft, behavior: 'smooth' });
-          }
-          thumbs.forEach(function(t) { t.classList.remove('active'); });
-          this.classList.add('active');
-        });
-      });
-      
-      // スクロール時にサムネイルをハイライト
-      container.addEventListener('scroll', function() {
-        var scrollLeft = container.scrollLeft;
-        var containerWidth = container.offsetWidth;
-        var items = container.querySelectorAll('.kabag-slider-item');
-        items.forEach(function(item, i) {
-          if (item.offsetLeft <= scrollLeft + containerWidth / 2 && 
-              item.offsetLeft + item.offsetWidth > scrollLeft + containerWidth / 2) {
-            thumbs.forEach(function(t) { t.classList.remove('active'); });
-            if (thumbs[i]) thumbs[i].classList.add('active');
-          }
-        });
-      });
-    })();
-    </scr` + `ipt>
 `;
   }
   
