@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KABAG 診断フローチャートエディター</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; overflow: hidden; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useCallback, useEffect } = React;
+
+// ===== Initial node positions (tree layout) =====
+function layoutTree(questions, results) {
+  const nodes = {};
+  const visited = new Set();
+  const positions = {};
+  
+  // Build adjacency
+  const qMap = {};
+  questions.forEach(q => { qMap[q.id] = q; });
+  const rSet = new Set(results.map(r => r.id));
+
+  // BFS to assign positions
+  const queue = [{ id: questions[0]?.id, depth: 0, index: 0, parentCount: 1 }];
+  const depthCount = {};
+  const depthNodes = {};
+  
+  // First pass: determine depth of each node
+  const nodeDepth = {};
+  const bfsQueue = [questions[0]?.id];
+  const bfsVisited = new Set();
+  let maxDepth = 0;
+  
+  while (bfsQueue.length > 0) {
+    const id = bfsQueue.shift();
+    if (!id || bfsVisited.has(id)) continue;
+    bfsVisited.add(id);
+    
+    const depth = nodeDepth[id] || 0;
+    maxDepth = Math.max(maxDepth, depth);
+    
+    if (!depthNodes[depth]) depthNodes[depth] = [];
+    depthNodes[depth].push(id);
+    
+    if (qMap[id]) {
+      const q = qMap[id];
+      [q.n1, q.n2].forEach(nid => {
+        if (nid && !bfsVisited.has(nid)) {
+          nodeDepth[nid] = depth + 1;
+          bfsQueue.push(nid);
+        }
+      });
+    }
+  }
+
+  // Assign positions
+  Object.keys(depthNodes).forEach(d => {
+    const dep = parseInt(d);
+    const items = depthNodes[dep];
+    const totalWidth = items.length * 220;
+    const startX = -totalWidth / 2 + 110;
+    items.forEach((id, i) => {
+      positions[id] = { x: startX + i * 220, y: dep * 160 + 40 };
+    });
+  });
+
+  // Any nodes not positioned
+  let extraX = 0;
+  [...questions, ...results].forEach(item => {
+    if (!positions[item.id]) {
+      positions[item.id] = { x: extraX, y: (maxDepth + 1) * 160 + 40 };
+      extraX += 220;
+    }
+  });
+
+  return positions;
+}
+
+// ===== Initial Data =====
+const initQ = [
+  { id:"Q1", label:"Q1", text:"今のバッグで一番\n困っていることは？", desc:"", icon1:"🔍", icon2:"👨‍👩‍👧", c1:"モノが見つからない", c1sub:"", c2:"家族のお出かけ準備が大変", c2sub:"", n1:"Q2", n2:"Q2F" },
+  { id:"Q2", label:"Q2", text:"整理の悩み、\nどちらに近い？", desc:"", icon1:"⏱", icon2:"🧩", c1:"構造さえ良ければ解決できそう", c1sub:"", c2:"整理そのものが苦手", c2sub:"", n1:"Q3T", n2:"Q3A" },
+  { id:"Q3T", label:"Q3", text:"持ち物の量は？", desc:"", icon1:"💼", icon2:"🪶", c1:"しっかり持ち歩く", c1sub:"", c2:"身軽に動きたい", c2sub:"", n1:"Q4TF", n2:"Q4TM" },
+  { id:"Q4TF", label:"Q4", text:"バッグの形は？", desc:"", icon1:"🎒", icon2:"👜", c1:"リュック派", c1sub:"", c2:"トート・多機能派", c2sub:"", n1:"Q5TR", n2:"Q5TT" },
+  { id:"Q5TR", label:"Q5", text:"リュックの機能は？", desc:"", icon1:"🖥️", icon2:"✨", c1:"本格派", c1sub:"", c2:"コンパクト/手頃", c2sub:"", n1:"Q6TH", n2:"Q6TC" },
+  { id:"Q6TH", label:"Q6", text:"利き手は？", desc:"", icon1:"✋", icon2:"🤚", c1:"右利き", c1sub:"", c2:"左利き", c2sub:"", n1:"R_box2R", n2:"R_box2L" },
+  { id:"Q6TC", label:"Q6", text:"予算感は？", desc:"", icon1:"💎", icon2:"🌱", c1:"しっかり投資", c1sub:"", c2:"手軽に試したい", c2sub:"", n1:"R_boxmini2", n2:"Q7TE" },
+  { id:"Q7TE", label:"Q7", text:"サイズは？", desc:"", icon1:"📦", icon2:"📐", c1:"コンパクト", c1sub:"", c2:"余裕ほしい", c2sub:"", n1:"R_jitanM", n2:"R_jitanL" },
+  { id:"Q5TT", label:"Q5", text:"どちらが好き？", desc:"", icon1:"👜", icon2:"🔄", c1:"トート", c1sub:"", c2:"多機能・変形", c2sub:"", n1:"R_address", n2:"R_wonder" },
+  { id:"Q4TM", label:"Q4", text:"ペットボトルも持つ？", desc:"", icon1:"🧴", icon2:"🪶", c1:"持ち歩く", c1sub:"", c2:"最小限でOK", c2sub:"", n1:"Q5TP", n2:"Q5TW" },
+  { id:"Q5TP", label:"Q5", text:"＋αの荷物は？", desc:"", icon1:"📱", icon2:"☂️", c1:"少し", c1sub:"", c2:"傘やポーチも", c2sub:"", n1:"R_spot", n2:"R_clinic" },
+  { id:"Q5TW", label:"Q5", text:"持ち方は？", desc:"", icon1:"👝", icon2:"🔀", c1:"ショルダー", c1sub:"", c2:"2WAY", c2sub:"", n1:"R_with", n2:"R_sack" },
+  { id:"Q3A", label:"Q3", text:"荷物の量は？", desc:"専門家と667人の声から生まれたシリーズ", icon1:"📚", icon2:"📱", c1:"多め", c1sub:"", c2:"普通〜少なめ", c2sub:"", n1:"Q4AL", n2:"Q4AR" },
+  { id:"Q4AL", label:"Q4", text:"素材の好みは？", desc:"", icon1:"🛡️", icon2:"🪶", c1:"丈夫さ重視", c1sub:"", c2:"軽さ重視", c2sub:"", n1:"R_adhd_BL", n2:"R_adhd_TL" },
+  { id:"Q4AR", label:"Q4", text:"素材の好みは？", desc:"", icon1:"🛡️", icon2:"🪶", c1:"丈夫さ重視", c1sub:"", c2:"軽さ重視", c2sub:"", n1:"R_adhd_BR", n2:"R_adhd_TR" },
+  { id:"Q2F", label:"Q2", text:"誰のためのバッグ？", desc:"", icon1:"👨‍👩‍👧", icon2:"👶", c1:"親（自分）用", c1sub:"", c2:"子ども関連", c2sub:"", n1:"Q3FP", n2:"Q3FK" },
+  { id:"Q3FP", label:"Q3", text:"主な用途は？", desc:"", icon1:"🎒", icon2:"🛒", c1:"お出かけリュック", c1sub:"", c2:"買い物（保温保冷）", c2sub:"", n1:"Q4FPR", n2:"Q4FC" },
+  { id:"Q4FPR", label:"Q4", text:"誰が使う？", desc:"", icon1:"👩", icon2:"👨", c1:"ママ", c1sub:"", c2:"パパ", c2sub:"", n1:"R_mothers2", n2:"R_fathers" },
+  { id:"Q4FC", label:"Q4", text:"買い物の量は？", desc:"", icon1:"🥛", icon2:"🛒", c1:"日常的", c1sub:"", c2:"まとめ買い", c2sub:"", n1:"R_cold_R", n2:"R_cold_L" },
+  { id:"Q3FK", label:"Q3", text:"どんなバッグ？", desc:"", icon1:"🎒", icon2:"🤱", c1:"子ども用リュック", c1sub:"", c2:"抱っこ紐付き", c2sub:"", n1:"Q4FKD", n2:"R_hug" },
+  { id:"Q4FKD", label:"Q4", text:"デザインは？", desc:"", icon1:"🚄", icon2:"🚗", c1:"新幹線", c1sub:"", c2:"くるま", c2sub:"", n1:"Q5FKS", n2:"R_car" },
+  { id:"Q5FKS", label:"Q5", text:"どの新幹線？", desc:"", icon1:"💚", icon2:"💛", c1:"はやぶさ", c1sub:"", c2:"ドクターイエロー", c2sub:"", n1:"R_hayabusa", n2:"R_dryellow" },
+];
+
+const initR = [
+  { id:"R_boxmini2", cat:"time", catLabel:"時短", type:"毎朝カバンの底を漁る人", name:"box mini 2", code:"5503", price:"13,200", catch:"探さない。迷わない。", before:"財布が見つからない", after:"手を入れた瞬間に触れる", points:"✅ 立体収納\n✅ 15インチPC対応\n✅ 30日間返金保証", voice:"「探しやすい」", url:"/products/kabag_box_mini2" },
+  { id:"R_box2R", cat:"time", catLabel:"時短", type:"荷物が多い人(右)", name:"box 2 右利き", code:"5376", price:"13,750", catch:"大容量で見える", before:"底の物が出せない", after:"3室で定位置", points:"✅ 3室構造\n✅ 右利き専用\n✅ 30日間返金保証", voice:"「使いやすい」", url:"/products/el5376" },
+  { id:"R_box2L", cat:"time", catLabel:"時短", type:"左利きの人", name:"box 2 左利き", code:"5400", price:"13,750", catch:"左利き専用", before:"右利き設計で不便", after:"自然な動作でアクセス", points:"✅ 左利き専用\n✅ 30日間返金保証", voice:"「左利きに最適」", url:"/products/el5400" },
+  { id:"R_jitanM", cat:"time", catLabel:"時短", type:"手軽に体験したい人", name:"時短リュック M", code:"5517", price:"8,990", catch:"まずは体験。", before:"高いバッグで失敗が怖い", after:"手頃に時短を体験", points:"✅ ¥8,990\n✅ 30日間返金保証", voice:"「色違い検討中」", url:"/products/5517" },
+  { id:"R_jitanL", cat:"time", catLabel:"時短", type:"手軽+余裕サイズ", name:"時短リュック L", code:"5518", price:"9,900", catch:"余裕のサイズ。", before:"中がカオス", after:"たっぷり収納で整理", points:"✅ ¥9,900\n✅ 30日間返金保証", voice:"「戻れません」", url:"/products/5518" },
+  { id:"R_address", cat:"time", catLabel:"時短", type:"トート派の人", name:"address", code:"5502", price:"13,200", catch:"2階建てトート", before:"底でモノが混ざる", after:"住所が決まる", points:"✅ 2階建て\n✅ 30日間返金保証", voice:"「他にない整理力」", url:"/products/kabag_address" },
+  { id:"R_wonder", cat:"time", catLabel:"時短", type:"何役もこなしたい人", name:"wonder", code:"8540", price:"16,500", catch:"変形リュック", before:"バッグ増え続ける", after:"これ1つで対応", points:"✅ 変形\n✅ 30日間返金保証", voice:"「万能」", url:"/products/el8540" },
+  { id:"R_spot", cat:"time", catLabel:"時短", type:"身軽+ペットボトル", name:"spot", code:"8665", price:"7,590", catch:"身軽ポシェット", before:"ペットボトルの置き場", after:"専用収納付き", points:"✅ ペットボトル収納\n✅ 30日間返金保証", voice:"「すっぽり入る」", url:"/products/kabag-spot" },
+  { id:"R_clinic", cat:"time", catLabel:"時短", type:"外出で整理したい人", name:"clinic", code:"5352", price:"6,490", catch:"多収納ショルダー", before:"収納少なすぎ", after:"傘まで入る", points:"✅ 多ポケット\n✅ 30日間返金保証", voice:"「当たり前に収納」", url:"/products/el5352" },
+  { id:"R_with", cat:"time", catLabel:"時短", type:"超ミニマル派", name:"with", code:"5369", price:"4,290", catch:"手ぶら感覚", before:"ポケットだけでは不安", after:"超コンパクト", points:"✅ ¥4,290\n✅ 30日間返金保証", voice:"「手ぶら感覚」", url:"/products/el5369" },
+  { id:"R_sack", cat:"time", catLabel:"時短", type:"超ミニマル派2WAY", name:"sack", code:"8366", price:"4,290", catch:"2WAYミニマル", before:"大きいバッグ嫌", after:"2WAYで自由", points:"✅ ¥4,290\n✅ 30日間返金保証", voice:"「サッと使える」", url:"/products/el8366" },
+  { id:"R_adhd_BL", cat:"adhd", catLabel:"ADHD", type:"努力なし整理(大・丈夫)", name:"ADHD バリスティック L", code:"5510", price:"19,800", catch:"しくみで整理", before:"何度片付けても戻る", after:"配置シールで視覚化", points:"✅ 専門家開発\n✅ 特許取得\n✅ 30日間返金保証", voice:"「魔法のリュック」", url:"/products/adhd-bl" },
+  { id:"R_adhd_TL", cat:"adhd", catLabel:"ADHD", type:"軽さ+整理(大)", name:"ADHD ツイル L", code:"5512", price:"17,600", catch:"軽くて整理できる", before:"重くて使わなくなる", after:"毎日持てる軽さ", points:"✅ ツイル軽量\n✅ 30日間返金保証", voice:"「ノーストレス」", url:"/products/adhd-tl" },
+  { id:"R_adhd_BR", cat:"adhd", catLabel:"ADHD", type:"コンパクト+丈夫", name:"ADHD バリスティック R", code:"5513", price:"18,700", catch:"小さくても強い", before:"ヘタりやすい", after:"長持ちコンパクト", points:"✅ 高耐久\n✅ 30日間返金保証", voice:"「気持ちが楽に」", url:"/products/adhd-br" },
+  { id:"R_adhd_TR", cat:"adhd", catLabel:"ADHD", type:"身軽+整理", name:"ADHD ツイル R", code:"5509", price:"16,500", catch:"身軽で整理", before:"背負われている感", after:"小柄にフィット", points:"✅ 最軽量\n✅ 30日間返金保証", voice:"「全てクリア」", url:"/products/adhd-tr" },
+  { id:"R_mothers2", cat:"family", catLabel:"ファミリー", type:"ママ", name:"mother's 2", code:"8604", price:"11,000", catch:"ママ用整理リュック", before:"全部ぐちゃぐちゃ", after:"分離収納", points:"✅ ママの声で設計\n✅ 30日間返金保証", voice:"「整理できる」", url:"/products/el8604" },
+  { id:"R_fathers", cat:"family", catLabel:"ファミリー", type:"パパ", name:"Father's", code:"8557", price:"13,200", catch:"パパ専用リュック", before:"荷物管理が苦手", after:"自信を持ってお出かけ", points:"✅ パパ専用設計\n✅ 30日間返金保証", voice:"「パパのため」", url:"/products/el8557" },
+  { id:"R_hug", cat:"family", catLabel:"ファミリー", type:"急な抱っこ対策", name:"hug", code:"5416", price:"11,000", catch:"抱っこ紐内蔵", before:"抱っこ紐忘れた", after:"いつでも対応", points:"✅ 抱っこ紐内蔵\n✅ 30日間返金保証", voice:"「安心」", url:"/products/kabag-hug" },
+  { id:"R_cold_R", cat:"family", catLabel:"ファミリー", type:"日常買い物", name:"保温保冷 R", code:"8472", price:"6,490", catch:"保温保冷バッグ", before:"冷凍品が溶ける", after:"安全に持ち帰り", points:"✅ 保温保冷\n✅ 3WAY\n✅ 30日間返金保証", voice:"「探さなくなった」", url:"/products/el8472" },
+  { id:"R_cold_L", cat:"family", catLabel:"ファミリー", type:"まとめ買い", name:"保温保冷 L", code:"8471", price:"7,590", catch:"大容量保温保冷", before:"潰れる", after:"リュックで楽", points:"✅ 大容量\n✅ 30日間返金保証", voice:"「牛乳4本余裕」", url:"/products/el8471" },
+  { id:"R_hayabusa", cat:"family", catLabel:"ファミリー", type:"キッズ新幹線", name:"E5系はやぶさ", code:"5439", price:"7,590", catch:"おもちゃ箱リュック", before:"中がぐちゃぐちゃ", after:"自分で片付ける", points:"✅ はやぶさデザイン", voice:"「大人気」", url:"/products/el5439" },
+  { id:"R_dryellow", cat:"family", catLabel:"ファミリー", type:"キッズDr.Yellow", name:"Dr.Yellow", code:"5438", price:"7,590", catch:"ドクターイエロー", before:"中が混ざる", after:"自分で片付ける", points:"✅ Dr.Yellowデザイン", voice:"「特別感」", url:"/products/el5438" },
+  { id:"R_car", cat:"family", catLabel:"ファミリー", type:"キッズくるま", name:"car", code:"5368", price:"6,490", catch:"くるまリュック", before:"中が混ざる", after:"自分で片付ける", points:"✅ くるまデザイン", voice:"「車好きに」", url:"/products/el5368" },
+];
+
+const initCfg = { brandColor:"#E67E22", brandColorLight:"#FFF3E8", brandColorDark:"#BF6516", title:"あなたにぴったりの\nKABAGが見つかる診断", subtitle:"2択の質問に答えるだけ", badge:"", maxDepth:7, ctaText:"この商品を見る →", retryText:"もう一度診断する" };
+
+const CAT_COLORS = { time:{ bg:"#FFF8E1", border:"#F9A825", text:"#F57F17" }, family:{ bg:"#E8F5E9", border:"#43A047", text:"#2E7D32" }, adhd:{ bg:"#F3E5F5", border:"#8E24AA", text:"#6A1B9A" } };
+
+// Small input
+function In({ value, onChange, placeholder="", style={} }) {
+  return <input type="text" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{ padding:"4px 6px", border:"1px solid #ddd", borderRadius:4, fontSize:12, width:"100%", fontFamily:"inherit", ...style }} />;
+}
+function Tx({ value, onChange, rows=2 }) {
+  return <textarea value={value} onChange={e=>onChange(e.target.value)} rows={rows} style={{ width:"100%", padding:"4px 6px", border:"1px solid #ddd", borderRadius:4, fontSize:12, fontFamily:"inherit", resize:"vertical", lineHeight:1.4 }} />;
+}
+
+function App() {
+  const [qs, setQs] = useState(initQ);
+  const [rs, setRs] = useState(initR);
+  const [cfg, setCfg] = useState(initCfg);
+  const [pos, setPos] = useState(() => layoutTree(initQ, initR));
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(0.45);
+  const [selected, setSelected] = useState(null); // { type:'q'|'r', id }
+  const [dragging, setDragging] = useState(null);
+  const [panning, setPanning] = useState(false);
+  const [panStart, setPanStart] = useState(null);
+  const [connecting, setConnecting] = useState(null); // { fromId, slot: 'n1'|'n2', mx, my }
+  const [copied, setCopied] = useState(false);
+  const [showCfg, setShowCfg] = useState(false);
+  const canvasRef = useRef(null);
+  const dragOffset = useRef({ x:0, y:0 });
+
+  const allIds = [...qs.map(q=>q.id), ...rs.map(r=>r.id)];
+  const qMap = {}; qs.forEach(q => qMap[q.id]=q);
+  const rMap = {}; rs.forEach(r => rMap[r.id]=r);
+
+  const NODE_W = 180;
+  const NODE_H_Q = 100;
+  const NODE_H_R = 64;
+
+  // ===== Mouse handlers for canvas =====
+  const getCanvasPoint = (e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left - pan.x) / zoom,
+      y: (e.clientY - rect.top - pan.y) / zoom
+    };
+  };
+
+  const onCanvasMouseDown = (e) => {
+    if (e.target === canvasRef.current || e.target.tagName === 'svg' || e.target.tagName === 'line' || e.target.tagName === 'path') {
+      setPanning(true);
+      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      setSelected(null);
+    }
+  };
+
+  const onCanvasMouseMove = (e) => {
+    if (panning && panStart) {
+      setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
+    }
+    if (dragging) {
+      const p = getCanvasPoint(e);
+      setPos(prev => ({ ...prev, [dragging]: { x: p.x - dragOffset.current.x, y: p.y - dragOffset.current.y } }));
+    }
+    if (connecting) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      setConnecting(prev => prev ? { ...prev, mx: e.clientX - rect.left, my: e.clientY - rect.top } : null);
+    }
+  };
+
+  const onCanvasMouseUp = (e) => {
+    if (connecting) {
+      // Check if dropped on a node
+      const p = getCanvasPoint(e);
+      let target = null;
+      allIds.forEach(id => {
+        const np = pos[id];
+        if (np && p.x >= np.x && p.x <= np.x + NODE_W && p.y >= np.y && p.y <= np.y + 120) {
+          target = id;
+        }
+      });
+      if (target && target !== connecting.fromId) {
+        const idx = qs.findIndex(q => q.id === connecting.fromId);
+        if (idx >= 0) {
+          const nq = [...qs];
+          nq[idx] = { ...nq[idx], [connecting.slot]: target };
+          setQs(nq);
+        }
+      }
+      setConnecting(null);
+    }
+    setPanning(false);
+    setPanStart(null);
+    setDragging(null);
+  };
+
+  const onWheel = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.05 : 0.05;
+    setZoom(z => Math.max(0.15, Math.min(2, z + delta)));
+  };
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (el) el.addEventListener('wheel', onWheel, { passive: false });
+    return () => { if (el) el.removeEventListener('wheel', onWheel); };
+  }, []);
+
+  const startDrag = (id, e) => {
+    e.stopPropagation();
+    const p = getCanvasPoint(e);
+    const np = pos[id] || { x: 0, y: 0 };
+    dragOffset.current = { x: p.x - np.x, y: p.y - np.y };
+    setDragging(id);
+    setSelected(qMap[id] ? { type:'q', id } : rMap[id] ? { type:'r', id } : null);
+  };
+
+  const startConnect = (fromId, slot, e) => {
+    e.stopPropagation();
+    const rect = canvasRef.current.getBoundingClientRect();
+    setConnecting({ fromId, slot, mx: e.clientX - rect.left, my: e.clientY - rect.top });
+  };
+
+  // ===== Draw connections =====
+  const renderConnections = () => {
+    const lines = [];
+    qs.forEach(q => {
+      const from = pos[q.id];
+      if (!from) return;
+      [['n1', '#E67E22'], ['n2', '#3498DB']].forEach(([slot, color]) => {
+        const tid = q[slot];
+        const to = tid ? pos[tid] : null;
+        if (from && to) {
+          const x1 = from.x + (slot === 'n1' ? NODE_W * 0.3 : NODE_W * 0.7);
+          const y1 = from.y + NODE_H_Q;
+          const x2 = to.x + NODE_W / 2;
+          const y2 = to.y;
+          const my = (y1 + y2) / 2;
+          lines.push(
+            <path key={q.id+slot} d={`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`}
+              fill="none" stroke={color} strokeWidth={2.5} strokeOpacity={0.7} />
+          );
+          // Arrow
+          lines.push(
+            <polygon key={q.id+slot+"a"} points={`${x2-4},${y2-6} ${x2+4},${y2-6} ${x2},${y2}`} fill={color} opacity={0.7} />
+          );
+        }
+      });
+    });
+
+    // Connecting line
+    if (connecting) {
+      const from = pos[connecting.fromId];
+      if (from) {
+        const x1 = from.x + (connecting.slot === 'n1' ? NODE_W * 0.3 : NODE_W * 0.7);
+        const y1 = from.y + NODE_H_Q;
+        const x2 = (connecting.mx - pan.x) / zoom;
+        const y2 = (connecting.my - pan.y) / zoom;
+        lines.push(
+          <line key="connecting" x1={x1} y1={y1} x2={x2} y2={y2} stroke="#E67E22" strokeWidth={2} strokeDasharray="6,4" opacity={0.8} />
+        );
+      }
+    }
+    return lines;
+  };
+
+  // ===== Node components =====
+  const QNode = ({ q }) => {
+    const p = pos[q.id] || { x:0, y:0 };
+    const isSel = selected?.id === q.id;
+    return (
+      <div onMouseDown={e => startDrag(q.id, e)} style={{
+        position:"absolute", left: p.x, top: p.y, width: NODE_W,
+        background:"#fff", border: isSel ? "3px solid #E67E22" : "2px solid #ccc",
+        borderRadius:10, boxShadow: isSel ? "0 0 0 3px rgba(230,126,34,0.2)" : "0 2px 8px rgba(0,0,0,0.08)",
+        cursor: dragging === q.id ? "grabbing" : "grab", userSelect:"none", zIndex: isSel ? 10 : 1, transition: dragging === q.id ? "none" : "box-shadow 0.2s"
+      }}>
+        {/* Header */}
+        <div style={{ background:"#f8f8f8", borderRadius:"8px 8px 0 0", padding:"6px 10px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:"1px solid #eee" }}>
+          <span style={{ fontSize:10, fontWeight:700, color:"#E67E22" }}>{q.id}</span>
+          <span style={{ fontSize:9, color:"#999" }}>質問</span>
+        </div>
+        {/* Body */}
+        <div style={{ padding:"8px 10px" }}>
+          <div style={{ fontSize:12, fontWeight:600, lineHeight:1.3, color:"#333", minHeight:28 }}>{q.text.split('\n')[0]}</div>
+        </div>
+        {/* Connectors */}
+        <div style={{ display:"flex", borderTop:"1px solid #eee" }}>
+          <div onMouseDown={e => startConnect(q.id, 'n1', e)}
+            style={{ flex:1, padding:"5px", textAlign:"center", fontSize:9, color:"#E67E22", cursor:"crosshair", borderRight:"1px solid #eee", background:"#FFF8F0", borderRadius:"0 0 0 8px" }}
+            title="選択肢1の接続先をドラッグ">
+            {q.icon1} {q.n1 || "—"}
+          </div>
+          <div onMouseDown={e => startConnect(q.id, 'n2', e)}
+            style={{ flex:1, padding:"5px", textAlign:"center", fontSize:9, color:"#3498DB", cursor:"crosshair", background:"#F0F8FF", borderRadius:"0 0 8px 0" }}
+            title="選択肢2の接続先をドラッグ">
+            {q.icon2} {q.n2 || "—"}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const RNode = ({ r }) => {
+    const p = pos[r.id] || { x:0, y:0 };
+    const isSel = selected?.id === r.id;
+    const cc = CAT_COLORS[r.cat] || CAT_COLORS.time;
+    return (
+      <div onMouseDown={e => startDrag(r.id, e)} style={{
+        position:"absolute", left: p.x, top: p.y, width: NODE_W,
+        background: cc.bg, border: isSel ? `3px solid ${cc.border}` : `2px solid ${cc.border}`,
+        borderRadius:10, boxShadow: isSel ? `0 0 0 3px ${cc.border}40` : "0 2px 8px rgba(0,0,0,0.06)",
+        cursor: dragging === r.id ? "grabbing" : "grab", userSelect:"none", zIndex: isSel ? 10 : 1
+      }}>
+        <div style={{ padding:"8px 10px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+            <span style={{ fontSize:9, fontWeight:700, color:cc.text, background:"#fff", padding:"1px 6px", borderRadius:8 }}>{r.catLabel}</span>
+            <span style={{ fontSize:10, fontWeight:700, color:cc.text }}>¥{r.price}</span>
+          </div>
+          <div style={{ fontSize:12, fontWeight:700, color:"#333" }}>{r.name.split('\n')[0]}</div>
+          <div style={{ fontSize:9, color:"#888", marginTop:2 }}>{r.id}</div>
+        </div>
+      </div>
+    );
+  };
+
+  // ===== Side Panel =====
+  const sel = selected ? (selected.type === 'q' ? qMap[selected.id] : rMap[selected.id]) : null;
+  const selIdx = selected ? (selected.type === 'q' ? qs.findIndex(q=>q.id===selected.id) : rs.findIndex(r=>r.id===selected.id)) : -1;
+  const uQ = (f,v) => { const n=[...qs]; n[selIdx]={...n[selIdx],[f]:v}; setQs(n); };
+  const uR = (f,v) => { const n=[...rs]; n[selIdx]={...n[selIdx],[f]:v}; setRs(n); };
+
+  const deleteNode = () => {
+    if (!selected) return;
+    if (selected.type === 'q') {
+      if (qs.length <= 1) return;
+      setQs(qs.filter(q => q.id !== selected.id));
+    } else {
+      if (rs.length <= 1) return;
+      setRs(rs.filter(r => r.id !== selected.id));
+    }
+    const np = {...pos}; delete np[selected.id]; setPos(np);
+    setSelected(null);
+  };
+
+  const addNode = (type) => {
+    const vp = getCanvasPoint({ clientX: canvasRef.current.getBoundingClientRect().width/2 + canvasRef.current.getBoundingClientRect().left, clientY: canvasRef.current.getBoundingClientRect().height/2 + canvasRef.current.getBoundingClientRect().top });
+    const id = type === 'q' ? "Q_" + Date.now().toString(36) : "R_" + Date.now().toString(36);
+    setPos(prev => ({ ...prev, [id]: { x: vp.x - 90, y: vp.y - 40 } }));
+    if (type === 'q') {
+      const nq = { id, label:"NEW", text:"新しい質問", desc:"", icon1:"👈", icon2:"👉", c1:"選択肢1", c1sub:"", c2:"選択肢2", c2sub:"", n1:"", n2:"" };
+      setQs([...qs, nq]);
+      setSelected({ type:'q', id });
+    } else {
+      const nr = { id, cat:"time", catLabel:"時短", type:"タイプ名", name:"新しい商品", code:"", price:"0", catch:"", before:"", after:"", points:"", voice:"", url:"/" };
+      setRs([...rs, nr]);
+      setSelected({ type:'r', id });
+    }
+  };
+
+  // ===== HTML Generation =====
+  const genHTML = useCallback(() => {
+    const qo={}; qs.forEach(q=>{ qo[q.id]={label:q.label,text:q.text,desc:q.desc,icon1:q.icon1,icon2:q.icon2,c1:q.c1,c1sub:q.c1sub,c2:q.c2,c2sub:q.c2sub,n1:q.n1,n2:q.n2}; });
+    const ro={}; rs.forEach(r=>{ ro[r.id]={cat:r.cat,catLabel:r.catLabel,type:r.type,name:r.name,code:r.code,price:r.price,catch:r.catch,before:r.before,after:r.after,points:r.points,voice:r.voice,url:r.url}; });
+    return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap');*{margin:0;padding:0;box-sizing:border-box}.kd{--a:${cfg.brandColor};--al:${cfg.brandColorLight};--ad:${cfg.brandColorDark};font-family:'Noto Sans JP',sans-serif;color:#333;background:#FAFAFA;max-width:560px;margin:0 auto;padding:20px 16px}.kd h1{font-size:22px;font-weight:900;line-height:1.4;text-align:center;margin-bottom:6px}.kd .sub{font-size:13px;color:#777;text-align:center;margin-bottom:24px}.kd .bar{display:flex;align-items:center;gap:8px;margin-bottom:24px}.kd .bar-bg{flex:1;height:4px;background:#E8E8E8;border-radius:4px;overflow:hidden}.kd .bar-fill{height:100%;background:var(--a);border-radius:4px;transition:width .5s}.kd .bar-txt{font-size:12px;font-weight:700;color:var(--a);min-width:40px;text-align:right}.kd .card{background:#fff;border-radius:12px;box-shadow:0 2px 16px rgba(0,0,0,.06);padding:24px;animation:fi .4s}@keyframes fi{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}.kd .ql{font-size:12px;font-weight:700;color:var(--a);margin-bottom:8px}.kd .qt{font-size:18px;font-weight:700;line-height:1.5;margin-bottom:8px}.kd .qd{font-size:13px;color:#777;line-height:1.7;margin-bottom:20px}.kd .chs{display:flex;flex-direction:column;gap:10px}.kd .ch{display:flex;align-items:center;gap:14px;padding:16px;border:2px solid #E8E8E8;border-radius:12px;cursor:pointer;transition:.3s;background:#fff}.kd .ch:hover{border-color:var(--a);background:var(--al);box-shadow:0 4px 24px rgba(0,0,0,.1);transform:translateY(-1px)}.kd .ci{width:36px;height:36px;border-radius:50%;background:#FAFAFA;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;transition:.3s}.kd .ch:hover .ci{background:var(--a);color:#fff}.kd .ct{font-size:14px;font-weight:500;line-height:1.5}.kd .cs{font-size:12px;color:#777;margin-top:2px}.kd .bk{display:inline-flex;align-items:center;gap:4px;margin-top:16px;padding:8px 12px;font-size:13px;color:#777;background:none;border:none;cursor:pointer;border-radius:8px}.kd .bk:hover{background:#FAFAFA;color:#333}.kd .res{animation:fi .5s}.kd .rt{display:inline-block;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:12px}.kd .rt.time{background:#FFF8E1;color:#D4A017}.kd .rt.family{background:#E8F5E9;color:#2E7D32}.kd .rt.adhd{background:#F3E5F5;color:#6A1B9A}.kd .rn{font-size:24px;font-weight:900;line-height:1.3;margin-bottom:6px}.kd .rc{font-size:15px;color:#777;line-height:1.6;margin-bottom:20px}.kd .ba{display:flex;gap:12px;margin-bottom:20px}.kd .bx{flex:1;padding:16px;border-radius:12px;font-size:13px;line-height:1.7}.kd .bx.bf{background:#FFF3F3;border:1px solid #FFCDD2}.kd .bx.af{background:#E8F5E9;border:1px solid #A5D6A7}.kd .bl{font-size:11px;font-weight:700;margin-bottom:6px;display:block}.kd .bx.bf .bl{color:#C62828}.kd .bx.af .bl{color:#2E7D32}.kd .pts{background:#FAFAFA;border-radius:12px;padding:16px;margin-bottom:16px;font-size:13px;line-height:1.8}.kd .vc{background:var(--al);border-radius:12px;padding:16px;margin-bottom:20px;font-size:13px;line-height:1.7;font-style:italic}.kd .pd{background:#fff;border:2px solid #E8E8E8;border-radius:12px;padding:20px;margin-bottom:16px}.kd .pn{font-size:15px;font-weight:700;margin-bottom:4px}.kd .pp{font-size:20px;font-weight:900;color:var(--a)}.kd .pp small{font-size:12px;color:#777}.kd .cta{display:block;width:100%;padding:16px;background:var(--a);color:#fff;font-size:16px;font-weight:700;text-align:center;border:none;border-radius:12px;cursor:pointer;text-decoration:none;margin-bottom:10px}.kd .cta:hover{background:var(--ad)}.kd .ry{display:block;width:100%;padding:12px;background:none;color:#777;font-size:14px;text-align:center;border:1px solid #E8E8E8;border-radius:12px;cursor:pointer}@media(max-width:480px){.kd{padding:16px 12px}.kd h1{font-size:19px}.kd .qt{font-size:16px}.kd .ba{flex-direction:column;gap:8px}.kd .rn{font-size:20px}.kd .card{padding:20px 16px}}</style></head><body><div class="kd" id="K"><div style="text-align:center;margin-bottom:24px">${cfg.badge?`<span style="display:inline-block;background:var(--a);color:#fff;font-size:11px;font-weight:700;padding:4px 14px;border-radius:20px;margin-bottom:10px">${cfg.badge}</span>`:''}<h1>${cfg.title.replace(/\n/g,'<br>')}</h1><p class="sub">${cfg.subtitle}</p></div><div class="bar"><div class="bar-bg"><div class="bar-fill" id="pF"></div></div><div class="bar-txt" id="pT"></div></div><div id="C"></div></div><script>(function(){var Q=${JSON.stringify(qo)};var R=${JSON.stringify(ro)};var M=${cfg.maxDepth};var h=[];var c;var ct=document.getElementById('C'),pf=document.getElementById('pF'),pt=document.getElementById('pT');function n(s){return(s||'').replace(/\\n/g,'<br>')}function u(){var d=h.length+1;pf.style.width=Math.min(d/M*100,95)+'%';pt.textContent=d+'/'+M}function sQ(id){c=id;var q=Q[id];if(!q)return;u();var dh=q.desc?'<div class="qd"'+(id.indexOf("A")>-1?' style="background:#F3E5F5;padding:14px;border-radius:8px;border-left:3px solid #6A1B9A;color:#4A148C"':'')+'>'+n(q.desc)+'</div>':'';var bk=h.length?'<button class="bk" onclick="B()">← 戻る</button>':'';ct.innerHTML='<div class="card"><div class="ql">'+q.label+'</div><div class="qt">'+n(q.text)+'</div>'+dh+'<div class="chs"><div class="ch" onclick="C(\\''+q.n1+'\\')"><div class="ci">'+q.icon1+'</div><div><div class="ct">'+n(q.c1)+'</div>'+(q.c1sub?'<div class="cs">'+q.c1sub+'</div>':'')+'</div></div><div class="ch" onclick="C(\\''+q.n2+'\\')"><div class="ci">'+q.icon2+'</div><div><div class="ct">'+n(q.c2)+'</div>'+(q.c2sub?'<div class="cs">'+q.c2sub+'</div>':'')+'</div></div></div>'+bk+'</div>'}function sR(id){var r=R[id];if(!r)return;pf.style.width='100%';pt.textContent='完了！';ct.innerHTML='<div class="res"><div class="rt '+r.cat+'">'+r.catLabel+'</div><div style="font-size:13px;color:#777;margin-bottom:4px">あなたのタイプ</div><div class="rn">'+n(r.type)+'</div><div class="rc">'+n(r.catch)+'</div><div class="ba"><div class="bx bf"><span class="bl">😥 今のあなた</span>'+n(r.before)+'</div><div class="bx af"><span class="bl">✨ KABAGを使うと</span>'+n(r.after)+'</div></div><div class="pts">'+n(r.points)+'</div><div class="vc">💬 '+n(r.voice)+'</div><div class="pd"><div class="pn">'+n(r.name)+'</div><div class="pp">¥'+r.price+' <small>（税込・送料無料）</small></div></div><a class="cta" href="'+r.url+'">${cfg.ctaText}</a><button class="ry" onclick="X()">${cfg.retryText}</button></div>'}window.C=function(x){h.push(c);x.indexOf("R_")===0?sR(x):sQ(x);document.getElementById("K").scrollIntoView({behavior:"smooth",block:"start"})};window.B=function(){if(h.length)sQ(h.pop())};window.X=function(){h=[];sQ("${qs[0]?.id||'Q1'}")};sQ("${qs[0]?.id||'Q1'}");})();<\/script></body></html>`;
+  }, [qs, rs, cfg]);
+
+  const handleCopy = () => { navigator.clipboard.writeText(genHTML()).then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2000); }); };
+
+  const SL = { lbl:{ display:"block", fontSize:10, fontWeight:600, color:"#888", marginBottom:2, marginTop:6 } };
+
+  return (
+    <div style={{ fontFamily:"system-ui, sans-serif", height:"100vh", display:"flex", flexDirection:"column", background:"#1a1a2e", overflow:"hidden" }}>
+      {/* Top bar */}
+      <div style={{ background:"#16213e", padding:"6px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid #0f3460", flexShrink:0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:14, fontWeight:900, color:"#E67E22" }}>KABAG</span>
+          <span style={{ fontSize:11, color:"#888" }}>フローチャートエディター</span>
+          <span style={{ fontSize:10, color:"#555", marginLeft:8 }}>Q:{qs.length} R:{rs.length}</span>
+        </div>
+        <div style={{ display:"flex", gap:6 }}>
+          <button onClick={() => addNode('q')} style={{ padding:"4px 10px", fontSize:11, fontWeight:700, border:"1px solid #E67E22", borderRadius:6, cursor:"pointer", background:"transparent", color:"#E67E22" }}>＋ 質問</button>
+          <button onClick={() => addNode('r')} style={{ padding:"4px 10px", fontSize:11, fontWeight:700, border:"1px solid #43A047", borderRadius:6, cursor:"pointer", background:"transparent", color:"#43A047" }}>＋ 結果</button>
+          <div style={{ width:1, background:"#333", margin:"0 4px" }} />
+          <button onClick={() => setShowCfg(!showCfg)} style={{ padding:"4px 10px", fontSize:11, fontWeight:600, border:"1px solid #555", borderRadius:6, cursor:"pointer", background: showCfg?"#333":"transparent", color:"#aaa" }}>⚙</button>
+          <button onClick={handleCopy} style={{ padding:"4px 10px", fontSize:11, fontWeight:700, border:"none", borderRadius:6, cursor:"pointer", background: copied?"#27AE60":"#E67E22", color:"#fff" }}>{copied?"✅ コピー済":"📋 HTML出力"}</button>
+        </div>
+      </div>
+
+      <div style={{ flex:1, display:"flex", overflow:"hidden" }}>
+        {/* Canvas */}
+        <div ref={canvasRef} onMouseDown={onCanvasMouseDown} onMouseMove={onCanvasMouseMove} onMouseUp={onCanvasMouseUp} onMouseLeave={onCanvasMouseUp}
+          style={{ flex:1, position:"relative", overflow:"hidden", cursor: panning?"grabbing":"default", background:"#1a1a2e",
+            backgroundImage:"radial-gradient(circle, #2a2a4e 1px, transparent 1px)", backgroundSize: `${20*zoom}px ${20*zoom}px`,
+            backgroundPosition: `${pan.x}px ${pan.y}px`
+          }}>
+          {/* Zoom controls */}
+          <div style={{ position:"absolute", bottom:12, left:12, display:"flex", gap:4, zIndex:20 }}>
+            <button onClick={()=>setZoom(z=>Math.min(2,z+0.1))} style={{ width:28, height:28, borderRadius:6, border:"1px solid #444", background:"#222", color:"#aaa", cursor:"pointer", fontSize:14 }}>+</button>
+            <button onClick={()=>setZoom(z=>Math.max(0.15,z-0.1))} style={{ width:28, height:28, borderRadius:6, border:"1px solid #444", background:"#222", color:"#aaa", cursor:"pointer", fontSize:14 }}>−</button>
+            <span style={{ color:"#666", fontSize:10, lineHeight:"28px", marginLeft:4 }}>{Math.round(zoom*100)}%</span>
+          </div>
+          <div style={{ position:"absolute", bottom:12, right:12, fontSize:10, color:"#444", zIndex:20 }}>
+            ドラッグ: ノード移動 ｜ 背景ドラッグ: パン ｜ スクロール: ズーム ｜ 下部コネクタ→ノード: 接続
+          </div>
+
+          {/* Transform layer */}
+          <div style={{ transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})`, transformOrigin:"0 0", position:"absolute", top:0, left:0 }}>
+            {/* SVG connections */}
+            <svg style={{ position:"absolute", top:0, left:0, width:8000, height:8000, pointerEvents:"none", overflow:"visible" }}>
+              {renderConnections()}
+            </svg>
+            {/* Nodes */}
+            {qs.map(q => <QNode key={q.id} q={q} />)}
+            {rs.map(r => <RNode key={r.id} r={r} />)}
+          </div>
+        </div>
+
+        {/* Side panel */}
+        {(selected && sel) && (
+          <div style={{ width:280, background:"#16213e", borderLeft:"1px solid #0f3460", overflowY:"auto", flexShrink:0, padding:12 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:"#fff" }}>{selected.type==='q'?'❓ 質問':'🎯 結果'}</span>
+              <div style={{ display:"flex", gap:4 }}>
+                <button onClick={deleteNode} style={{ padding:"3px 8px", fontSize:10, border:"1px solid #C62828", borderRadius:4, cursor:"pointer", background:"transparent", color:"#EF9A9A" }}>🗑 削除</button>
+                <button onClick={()=>setSelected(null)} style={{ padding:"3px 8px", fontSize:10, border:"1px solid #555", borderRadius:4, cursor:"pointer", background:"transparent", color:"#888" }}>✕</button>
+              </div>
+            </div>
+
+            {selected.type === 'q' && selIdx >= 0 && (() => {
+              const q = qs[selIdx];
+              return (
+                <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                  <label style={SL.lbl}>ID</label><In value={q.id} onChange={v=>uQ("id",v)} />
+                  <label style={SL.lbl}>ラベル</label><In value={q.label} onChange={v=>uQ("label",v)} />
+                  <label style={SL.lbl}>質問文</label><Tx value={q.text} onChange={v=>uQ("text",v)} />
+                  <label style={SL.lbl}>補足テキスト</label><Tx value={q.desc} onChange={v=>uQ("desc",v)} rows={3} />
+                  <div style={{ display:"flex", gap:4 }}>
+                    <div style={{ flex:1 }}><label style={SL.lbl}>icon1</label><In value={q.icon1} onChange={v=>uQ("icon1",v)} /></div>
+                    <div style={{ flex:1 }}><label style={SL.lbl}>icon2</label><In value={q.icon2} onChange={v=>uQ("icon2",v)} /></div>
+                  </div>
+                  <div style={{ background:"#1e2a47", padding:8, borderRadius:6, marginTop:4 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#E67E22", marginBottom:4 }}>選択肢1</div>
+                    <Tx value={q.c1} onChange={v=>uQ("c1",v)} />
+                    <In value={q.c1sub} onChange={v=>uQ("c1sub",v)} placeholder="サブテキスト" style={{ marginTop:3 }} />
+                    <label style={SL.lbl}>遷移先</label>
+                    <select value={q.n1} onChange={e=>uQ("n1",e.target.value)} style={{ width:"100%", padding:4, border:"1px solid #444", borderRadius:4, fontSize:11, background:"#0f1a30", color:"#ddd" }}>
+                      <option value="">-- 選択 --</option>
+                      {allIds.map(t=><option key={t} value={t}>{t.startsWith("R_")?"🎯":"❓"} {t}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ background:"#1a2740", padding:8, borderRadius:6, marginTop:4 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#3498DB", marginBottom:4 }}>選択肢2</div>
+                    <Tx value={q.c2} onChange={v=>uQ("c2",v)} />
+                    <In value={q.c2sub} onChange={v=>uQ("c2sub",v)} placeholder="サブテキスト" style={{ marginTop:3 }} />
+                    <label style={SL.lbl}>遷移先</label>
+                    <select value={q.n2} onChange={e=>uQ("n2",e.target.value)} style={{ width:"100%", padding:4, border:"1px solid #444", borderRadius:4, fontSize:11, background:"#0f1a30", color:"#ddd" }}>
+                      <option value="">-- 選択 --</option>
+                      {allIds.map(t=><option key={t} value={t}>{t.startsWith("R_")?"🎯":"❓"} {t}</option>)}
+                    </select>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {selected.type === 'r' && selIdx >= 0 && (() => {
+              const r = rs[selIdx];
+              return (
+                <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                  <label style={SL.lbl}>ID</label><In value={r.id} onChange={v=>uR("id",v)} />
+                  <label style={SL.lbl}>カテゴリ</label>
+                  <select value={r.cat} onChange={e=>{uR("cat",e.target.value)}} style={{ width:"100%", padding:4, border:"1px solid #444", borderRadius:4, fontSize:11, background:"#0f1a30", color:"#ddd" }}>
+                    <option value="time">時短</option><option value="family">ファミリー</option><option value="adhd">ADHD</option>
+                  </select>
+                  <label style={SL.lbl}>カテゴリ表示名</label><In value={r.catLabel} onChange={v=>uR("catLabel",v)} />
+                  <label style={SL.lbl}>商品名</label><In value={r.name} onChange={v=>uR("name",v)} />
+                  <div style={{ display:"flex", gap:4 }}>
+                    <div style={{ flex:1 }}><label style={SL.lbl}>型番</label><In value={r.code} onChange={v=>uR("code",v)} /></div>
+                    <div style={{ flex:1 }}><label style={SL.lbl}>価格</label><In value={r.price} onChange={v=>uR("price",v)} /></div>
+                  </div>
+                  <label style={SL.lbl}>タイプ名</label><In value={r.type} onChange={v=>uR("type",v)} />
+                  <label style={SL.lbl}>キャッチコピー</label><Tx value={r.catch} onChange={v=>uR("catch",v)} />
+                  <div style={{ display:"flex", gap:4 }}>
+                    <div style={{ flex:1 }}><label style={{...SL.lbl,color:"#EF9A9A"}}>ビフォー</label><Tx value={r.before} onChange={v=>uR("before",v)} rows={3} /></div>
+                    <div style={{ flex:1 }}><label style={{...SL.lbl,color:"#A5D6A7"}}>アフター</label><Tx value={r.after} onChange={v=>uR("after",v)} rows={3} /></div>
+                  </div>
+                  <label style={SL.lbl}>ポイント</label><Tx value={r.points} onChange={v=>uR("points",v)} rows={3} />
+                  <label style={SL.lbl}>ユーザーの声</label><Tx value={r.voice} onChange={v=>uR("voice",v)} />
+                  <label style={SL.lbl}>URL</label><In value={r.url} onChange={v=>uR("url",v)} />
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Config panel */}
+        {showCfg && (
+          <div style={{ width:260, background:"#16213e", borderLeft:"1px solid #0f3460", overflowY:"auto", flexShrink:0, padding:12 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:"#fff" }}>⚙ 設定</span>
+              <button onClick={()=>setShowCfg(false)} style={{ background:"none", border:"1px solid #555", borderRadius:4, color:"#888", cursor:"pointer", padding:"2px 6px", fontSize:10 }}>✕</button>
+            </div>
+            <label style={SL.lbl}>メインカラー</label>
+            <div style={{ display:"flex", gap:4 }}><input type="color" value={cfg.brandColor} onChange={e=>setCfg({...cfg,brandColor:e.target.value})} style={{ width:30, height:24, border:"none", cursor:"pointer" }} /><In value={cfg.brandColor} onChange={v=>setCfg({...cfg,brandColor:v})} /></div>
+            <label style={SL.lbl}>ライトカラー</label><In value={cfg.brandColorLight} onChange={v=>setCfg({...cfg,brandColorLight:v})} />
+            <label style={SL.lbl}>ダークカラー</label><In value={cfg.brandColorDark} onChange={v=>setCfg({...cfg,brandColorDark:v})} />
+            <label style={SL.lbl}>タイトル</label><Tx value={cfg.title} onChange={v=>setCfg({...cfg,title:v})} />
+            <label style={SL.lbl}>サブタイトル</label><In value={cfg.subtitle} onChange={v=>setCfg({...cfg,subtitle:v})} />
+            <label style={SL.lbl}>バッジ（空=非表示）</label><In value={cfg.badge} onChange={v=>setCfg({...cfg,badge:v})} />
+            <label style={SL.lbl}>最大質問数</label><In value={String(cfg.maxDepth)} onChange={v=>setCfg({...cfg,maxDepth:Number(v)||7})} />
+            <label style={SL.lbl}>CTAボタン</label><In value={cfg.ctaText} onChange={v=>setCfg({...cfg,ctaText:v})} />
+            <label style={SL.lbl}>リトライ</label><In value={cfg.retryText} onChange={v=>setCfg({...cfg,retryText:v})} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
