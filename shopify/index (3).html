@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KABAG 商品ページ HTML生成アプリ</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 0; color: #333; }
+    .app-container { display: flex; height: 100vh; }
+    .input-panel { width: 50%; height: 100vh; overflow-y: auto; padding: 20px; background: #fff; border-right: 2px solid #e0e0e0; }
+    .preview-panel { width: 50%; height: 100vh; overflow-y: auto; background: #fafafa; }
+    .preview-header { position: sticky; top: 0; background: #333; color: #fff; padding: 10px 20px; font-weight: bold; z-index: 100; display: flex; justify-content: space-between; align-items: center; }
+    .preview-content { padding: 20px; }
+    .preview-iframe { width: 100%; height: calc(100vh - 50px); border: none; background: #fff; }
+    h1 { text-align: center; color: #E8960A; margin-bottom: 20px; font-size: 1.3em; }
+    h2 { font-size: 1em; border-left: 4px solid #E8960A; padding-left: 12px; margin: 25px 0 12px 0; }
+    label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.85em; }
+    input[type="text"], input[type="url"], textarea, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+    input[type="text"]:focus, input[type="url"]:focus, textarea:focus, select:focus { outline: none; border-color: #E8960A; }
+    textarea { min-height: 60px; resize: vertical; }
+    .checkbox-group { background: #fafafa; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
+    .checkbox-group label { display: flex; align-items: center; font-weight: normal; margin-bottom: 8px; cursor: pointer; font-size: 0.9em; }
+    .checkbox-group input[type="checkbox"] { margin-right: 8px; width: 16px; height: 16px; }
+    .dynamic-list { background: #fafafa; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
+    .dynamic-item { background: #fff; padding: 12px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #e0e0e0; position: relative; }
+    .dynamic-item .delete-btn { position: absolute; top: 8px; right: 8px; background: #D94040; color: #fff; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; z-index: 10; }
+    .dynamic-item .delete-btn:hover { background: #B83030; transform: scale(1.1); }
+    .color-item { display: flex; align-items: center; padding-right: 40px; }
+    .color-item .color-input { flex: 1; margin-bottom: 0; }
+    .spec-other-item { padding-right: 40px; }
+    .spec-other-inputs { display: flex; gap: 10px; }
+    .spec-other-inputs input { flex: 1; margin-bottom: 0; }
+    .image-grid-item { position: relative; cursor: pointer; border-radius: 6px; overflow: hidden; }
+    .image-grid-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 3px solid transparent; transition: all 0.2s; }
+    .image-grid-item.selected img { border-color: #3D9B46; }
+    .image-grid-item.used img { opacity: 0.4; }
+    .image-grid-item.used::after { content: '追加済'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 10px; }
+    .image-grid-item .checkmark { position: absolute; top: 2px; right: 2px; background: #3D9B46; color: white; border-radius: 50%; width: 20px; height: 20px; display: none; align-items: center; justify-content: center; font-size: 12px; }
+    .image-grid-item.selected .checkmark { display: flex; }
+    .add-btn { background: #E8960A; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .add-btn:hover { background: #D18800; }
+    .inline-group { display: flex; gap: 12px; }
+    .inline-group > div { flex: 1; }
+    .output-buttons { display: flex; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0; }
+    .output-buttons button { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: bold; }
+    .copy-btn { background: #3D9B46; color: #fff; }
+    .copy-btn:hover { background: #368D3F; }
+    .download-btn { background: #2B87D1; color: #fff; }
+    .download-btn:hover { background: #2578BA; }
+    .copy-success { text-align: center; color: #3D9B46; font-weight: bold; margin-top: 10px; display: none; }
+    .other-input { display: none; margin-top: -8px; margin-bottom: 12px; }
+    .other-input.active { display: block; }
+    .preview-mode-btn { background: #E8960A; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .preview-mode-btn:hover { background: #D18800; }
+    .image-item-wrapper { display: flex; align-items: flex-start; gap: 10px; }
+    .image-thumbnail { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd; background: #f5f5f5; }
+    .image-thumbnail-placeholder { width: 80px; height: 80px; border-radius: 6px; border: 1px dashed #ccc; background: #f9f9f9; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999; text-align: center; }
+    .image-inputs { flex: 1; position: relative; }
+    .move-buttons { display: flex; flex-direction: column; gap: 2px; }
+    .move-btn { background: #e0e0e0; border: none; border-radius: 4px; width: 28px; height: 28px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+    .move-btn:hover { background: #E8960A; color: #fff; }
+    .dynamic-item.dragging { opacity: 0.5; border: 2px dashed #E8960A; }
+    .dynamic-item.drag-over { border-top: 3px solid #E8960A; }
+    .auto-generate-btn { background: #8B24A0; color: #fff; border: none; padding: 2px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; margin-left: 8px; }
+    .auto-generate-btn:hover { background: #6E1B90; }
+    .caption-suggest-popup { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 2px solid #8B24A0; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; max-height: 350px; overflow-y: auto; }
+    .caption-suggest-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #8B24A0; color: #fff; font-size: 13px; font-weight: bold; position: sticky; top: 0; }
+    .caption-suggest-header button { background: none; border: none; color: #fff; cursor: pointer; font-size: 16px; padding: 0 5px; }
+    .caption-suggest-list { max-height: 300px; overflow-y: auto; }
+    .caption-suggest-item { padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 13px; transition: background 0.2s; line-height: 1.5; }
+    .caption-suggest-item:hover { background: #F0E0F3; }
+    .caption-suggest-item.selected { background: #e0e0e0; color: #666; }
+    .caption-suggest-item:last-child { border-bottom: none; }
+    .load-tab-btn { flex: 1; padding: 10px 15px; border: 2px solid #E8960A; background: #fff; color: #E8960A; font-weight: bold; font-size: 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+    .load-tab-btn:hover { background: #FFF6DC; }
+    .load-tab-btn.active { background: #E8960A; color: #fff; }
+    .review-item { padding-right: 40px; }
+    .banner-img-item { padding-right: 40px; }
+    @media (max-width: 1024px) {
+      .app-container { flex-direction: column; }
+      .input-panel, .preview-panel { width: 100%; height: auto; min-height: 50vh; }
+      .preview-panel { border-top: 2px solid #e0e0e0; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+  <div class="input-panel">
+    <h1>🦛 KABAG HTML生成アプリ</h1>
+    
+    <!-- HTMLソース読み込みセクション -->
+    <div style="background: #FFF6DC; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #E8960A;">
+      <h2 style="margin-top: 0; border-left-color: #E8960A;">📥 データ読み込み</h2>
+      <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+        <button type="button" id="tabNewPage" class="load-tab-btn active" onclick="switchLoadTab('newPage')">既存ページから新規作成</button>
+        <button type="button" id="tabEditHtml" class="load-tab-btn" onclick="switchLoadTab('editHtml')">作成済みHTMLを編集</button>
+      </div>
+      <div id="loadTabNewPage">
+        <p style="font-size: 0.85em; color: #666; margin-bottom: 10px;">商品ページで「右クリック」→「ページのソースを表示」→ 全選択してコピー → 下に貼り付け</p>
+        <textarea id="htmlSource" placeholder="HTMLソースをここに貼り付けてください..." style="width: 100%; height: 100px; font-size: 12px; font-family: monospace;"></textarea>
+        <button type="button" class="add-btn" onclick="parseHTMLSource()" style="width: 100%; margin-top: 10px; padding: 12px; font-size: 14px;">🔍 解析して読み込む</button>
+      </div>
+      <div id="loadTabEditHtml" style="display: none;">
+        <p style="font-size: 0.85em; color: #666; margin-bottom: 10px;">このアプリで作成したHTMLを貼り付けると、フォームに反映されます</p>
+        <textarea id="editHtmlSource" placeholder="作成済みのHTMLコードをここに貼り付けてください..." style="width: 100%; height: 100px; font-size: 12px; font-family: monospace;"></textarea>
+        <button type="button" class="add-btn" onclick="loadCreatedHTML()" style="width: 100%; margin-top: 10px; padding: 12px; font-size: 14px; background: #3D9B46;">📂 HTMLを読み込んで編集</button>
+      </div>
+      <div id="extractedImages" style="display: none; margin-top: 15px;">
+        <p style="font-weight: bold; margin-bottom: 10px;">■ 抽出された画像（クリックで選択）</p>
+        <div id="imageGrid" style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 200px; overflow-y: auto;"></div>
+        <div style="margin-top: 10px;">
+          <button type="button" class="add-btn" onclick="applySelectedImages('detail')" style="margin-right: 5px;">商品詳細に追加</button>
+          <button type="button" class="add-btn" onclick="applySelectedImages('slider')" style="background: #2B87D1;">スライダーに追加</button>
+        </div>
+      </div>
+      <div id="extractedCaptionsDiv" style="display: none; margin-top: 15px;">
+        <p style="font-weight: bold; margin-bottom: 10px;">■ キャプション候補（画像追加時に選択可能）</p>
+        <div id="captionsList" style="background: #fff; padding: 10px; border-radius: 6px; max-height: 120px; overflow-y: auto; font-size: 12px;"></div>
+      </div>
+      <div id="extractedPoints" style="display: none; margin-top: 15px;">
+        <p style="font-weight: bold; margin-bottom: 10px;">■ 検出された商品ポイント（チェックして反映）</p>
+        <div id="pointsList" style="background: #fff; padding: 10px; border-radius: 6px; max-height: 150px; overflow-y: auto;"></div>
+        <button type="button" class="add-btn" onclick="applySelectedPoints()" style="width: 100%; margin-top: 10px;">チェックした項目を反映</button>
+      </div>
+    </div>
+    
+    <!-- 基本情報 -->
+    <h2>基本情報</h2>
+    <label>サブタイトル（小さい文字）</label>
+    <input type="text" id="productSubtitle" placeholder="例：本を読むのが愉しみになる" oninput="updatePreview()">
+    <label>カテゴリー名（中サイズ）</label>
+    <input type="text" id="productCategory" placeholder="例：レザーブックカバー" oninput="updatePreview()">
+    <label>商品名（大きい文字）</label>
+    <input type="text" id="productName" placeholder="例：bunko" oninput="updatePreview()">
+    <label>YouTube動画URL（任意）</label>
+    <input type="url" id="youtubeUrl" placeholder="例：https://www.youtube.com/embed/XXXXX" oninput="extractYoutubeUrl(this); updatePreview()">
+    <p style="font-size: 0.75em; color: #888; margin-top: -8px; margin-bottom: 12px;">※埋め込みコードを貼り付けてもURLを自動抽出します</p>
+    
+    <!-- レビューバナー -->
+    <h2>⭐ レビューバナー（YouTube直下に表示）</h2>
+    <p style="font-size: 0.8em; color: #888; margin-bottom: 10px;">※Judge.meのベストレビューを3件まで入力。クリックでレビューウィジェットにジャンプします</p>
+    
+    <!-- Judge.me API設定 -->
+    <div style="background: #f0f8ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #4A90A4;">
+      <p style="font-weight: bold; font-size: 0.9em; margin: 0 0 10px; color: #4A90A4;">🔗 Judge.me APIからレビュー自動取得</p>
+      <label>Shop Domain</label>
+      <input type="text" id="judgemeShopDomain" placeholder="例：kabag-jp.myshopify.com" style="margin-bottom: 8px;">
+      <label>Public API Token</label>
+      <input type="text" id="judgemeApiToken" placeholder="Judge.me Settings > Integrations で確認" style="margin-bottom: 8px;">
+      <label>商品URL or ハンドル</label>
+      <input type="text" id="judgemeProductHandle" placeholder="例：kabag-box-mini-2 または商品ページURL" style="margin-bottom: 8px;">
+      <p style="font-size: 0.7em; color: #888; margin: -4px 0 10px;">※商品URLを貼り付けるとハンドルを自動抽出します</p>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" class="add-btn" onclick="fetchJudgemeReviews()" style="flex: 1; padding: 10px; font-size: 13px; background: #4A90A4;">⭐ ベストレビューを取得</button>
+        <button type="button" class="add-btn" onclick="saveJudgemeSettings()" style="flex: 0; padding: 10px; font-size: 12px; background: #888;">💾 設定保存</button>
+      </div>
+      <div id="judgemeStatus" style="display: none; margin-top: 10px; padding: 8px; border-radius: 6px; font-size: 12px;"></div>
+    </div>
+    <div class="dynamic-list" id="reviewBannerList">
+      <div class="dynamic-item review-item">
+        <button type="button" class="delete-btn" onclick="deleteItem(this)">×</button>
+        <div style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+          <span style="background: #E8960A; color: #fff; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px;">BEST REVIEW</span>
+          <span style="color: #E8960A; font-size: 13px;">★★★★★</span>
+        </div>
+        <label>レビュータイトル</label>
+        <input type="text" class="review-title" placeholder="例：何度もリピしてます" oninput="updatePreview()">
+        <label>レビュー本文</label>
+        <textarea class="review-body" placeholder="例：とにかく使いやすい。ちょっとくらい雨に濡れても大丈夫で..." oninput="updatePreview()"></textarea>
+        <label>属性タグ（任意）</label>
+        <input type="text" class="review-tags" placeholder="例：実用品・普段使い｜自分用｜リピート" oninput="updatePreview()">
+        <label>キャプション（赤帯メッセージ）</label>
+        <input type="text" class="review-caption" placeholder="例：リピート続出！コンパクトなのに大容量で使いやすいバッグ" oninput="updatePreview()">
+      </div>
+    </div>
+    <button type="button" class="add-btn" onclick="addReviewBannerItem()">+ レビューを追加</button>
+    
+    <!-- クラファン実績・バナー画像 -->
+    <h2>🏆 クラファン実績・バナー画像（レビューバナー下に表示）</h2>
+    <p style="font-size: 0.8em; color: #888; margin-bottom: 10px;">※Makuake等のクラファン実績画像やプロモバナーを追加。複数追加・並び替え可能</p>
+    <div class="dynamic-list" id="bannerImageList"></div>
+    <button type="button" class="add-btn" onclick="addBannerImageItem()">+ バナー画像を追加</button>
+    
+    <!-- 購入前に知っておきたいこと -->
+    <h2>購入前に知っておきたいこと</h2>
+    <div class="checkbox-group" id="beforePurchaseCheckboxes">
+      <label><input type="checkbox" value="17インチのPC 収納OK" onchange="updatePreview()"> 17インチのPC 収納OK</label>
+      <label><input type="checkbox" value="15インチのPC 収納OK" onchange="updatePreview()"> 15インチのPC 収納OK</label>
+      <label><input type="checkbox" value="13インチのPC 収納OK" onchange="updatePreview()"> 13インチのPC 収納OK</label>
+      <label><input type="checkbox" value="A4ファイル 収納OK" onchange="updatePreview()"> A4ファイル 収納OK</label>
+      <label><input type="checkbox" value="ペットボトル収納OK" onchange="updatePreview()"> ペットボトル収納OK</label>
+      <label><input type="checkbox" value="30日間返金保証‼️" checked onchange="updatePreview()"> 30日間返金保証‼️</label>
+      <label><input type="checkbox" value="全国送料無料‼️" checked onchange="updatePreview()"> 全国送料無料‼️</label>
+    </div>
+    <div class="dynamic-list" id="beforePurchaseList">
+      <p style="font-size: 0.85em; color: #666; margin: 0 0 8px 0;">その他の項目：</p>
+    </div>
+    <button type="button" class="add-btn" onclick="addBeforePurchaseItem()">+ 項目を追加</button>
+    
+    <!-- よくある質問 -->
+    <h2>よくある質問</h2>
+    <div class="dynamic-list" id="faqList">
+      <div class="dynamic-item">
+        <button type="button" class="delete-btn" onclick="deleteItem(this)">×</button>
+        <label>質問</label>
+        <input type="text" class="faq-q" value="収納できるパソコンのサイズについて教えてください。" oninput="updatePreview()">
+        <label>回答</label>
+        <textarea class="faq-a" oninput="updatePreview()">15インチまで収納可能です。</textarea>
+      </div>
+      <div class="dynamic-item">
+        <button type="button" class="delete-btn" onclick="deleteItem(this)">×</button>
+        <label>質問</label>
+        <input type="text" class="faq-q" value="雨に濡れても大丈夫ですか？" oninput="updatePreview()">
+        <label>回答</label>
+        <textarea class="faq-a" oninput="updatePreview()">撥水加工の生地を使用しており、濡れにくい素材です。</textarea>
+      </div>
+      <div class="dynamic-item">
+        <button type="button" class="delete-btn" onclick="deleteItem(this)">×</button>
+        <label>質問</label>
+        <input type="text" class="faq-q" value="洗濯はできますか？" oninput="updatePreview()">
+        <label>回答</label>
+        <textarea class="faq-a" oninput="updatePreview()">洗濯はできません。</textarea>
+      </div>
+    </div>
+    <button type="button" class="add-btn" onclick="addFaqItem()">+ 質問を追加</button>
+    
+    <!-- 商品詳細画像 -->
+    <h2>商品詳細（画像＋キャプション）</h2>
+    <p style="font-size: 0.8em; color: #888; margin-bottom: 10px;">※ドラッグまたは▲▼ボタンで並び替え可能 / 1番目の画像はメインビジュアルになります</p>
+    <div class="dynamic-list" id="productDetailList">
+      <div class="dynamic-item" draggable="true" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="drop(event, 'productDetailList')" ondragend="dragEnd(event)">
+        <button type="button" class="delete-btn" onclick="deleteItem(this)">×</button>
+        <div class="image-item-wrapper">
+          <div class="move-buttons">
+            <button type="button" class="move-btn" onclick="moveItem(this, -1)">▲</button>
+            <button type="button" class="move-btn" onclick="moveItem(this, 1)">▼</button>
+          </div>
+          <div class="image-thumbnail-placeholder">画像<br>プレビュー</div>
+          <div class="image-inputs">
+            <label>画像URL</label>
+            <input type="url" class="detail-img" placeholder="https://cdn.shopify.com/..." oninput="updatePreview(); updateThumbnail(this, 'detail')">
+            <label>キャプション <button type="button" class="auto-generate-btn" onclick="generateCaption(this)">✨ 自動生成</button></label>
+            <textarea class="detail-caption" placeholder="例：ストレートに素材を感じてもらえるシンプルなデザイン。" oninput="updatePreview()"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="add-btn" onclick="addDetailItem()">+ 画像を追加</button>
+    
+    <!-- サイズ・素材 -->
+    <h2>サイズ・素材</h2>
+    <p style="font-size: 0.8em; color: #888; margin-bottom: 10px;">※空欄の項目は表示されません</p>
+    <div class="inline-group">
+      <div><label>容量</label><input type="text" id="capacity" placeholder="例：11L" oninput="updatePreview()"></div>
+      <div><label>重さ</label><input type="text" id="weight" placeholder="例：820g" oninput="updatePreview()"></div>
+    </div>
+    <label>サイズ <button type="button" class="auto-generate-btn" onclick="generateSizeSuggest()">✨ 自動生成</button></label>
+    <input type="text" id="size" placeholder="例：高さ37cm × 横28cm × マチ13cm" oninput="updatePreview()">
+    <label>素材（本体）</label>
+    <select id="materialMain" onchange="toggleMaterialOther('Main'); updatePreview()">
+      <option value="">-- 選択してください --</option>
+      <option value="ポリエステル">ポリエステル</option>
+      <option value="ナイロン">ナイロン</option>
+      <option value="バリスティックナイロン">バリスティックナイロン</option>
+      <option value="ハンプ">ハンプ</option>
+      <option value="牛革">牛革</option>
+      <option value="other">その他（直接入力）</option>
+    </select>
+    <div class="other-input" id="otherMaterialMain"><input type="text" id="materialMainOther" placeholder="素材を入力" oninput="updatePreview()"></div>
+    <label>素材（裏地）</label>
+    <select id="materialLining" onchange="toggleMaterialOther('Lining'); updatePreview()">
+      <option value="">-- 選択してください --</option>
+      <option value="ポリエステル">ポリエステル</option>
+      <option value="ナイロン">ナイロン</option>
+      <option value="リップストップナイロン">リップストップナイロン</option>
+      <option value="ハンプ">ハンプ</option>
+      <option value="other">その他（直接入力）</option>
+    </select>
+    <div class="other-input" id="otherMaterialLining"><input type="text" id="materialLiningOther" placeholder="素材を入力" oninput="updatePreview()"></div>
+    <label>カラー <button type="button" class="auto-generate-btn" onclick="generateColorSuggest()">✨ 自動生成</button></label>
+    <p style="font-size: 0.75em; color: #888; margin-top: -8px; margin-bottom: 8px;">※色ごとに1行ずつ入力してください</p>
+    <div class="dynamic-list" id="colorList">
+      <div class="dynamic-item color-item">
+        <button type="button" class="delete-btn" onclick="deleteItem(this)">×</button>
+        <input type="text" class="color-input" placeholder="例：ブラック（内装オレンジ）" oninput="updatePreview()">
+      </div>
+    </div>
+    <button type="button" class="add-btn" onclick="addColorItem()">+ カラーを追加</button>
+    <label style="margin-top: 15px;">生産地</label>
+    <select id="productionPlace" onchange="toggleOtherInput(); updatePreview()">
+      <option value="">-- 選択してください --</option>
+      <option value="中国">中国</option>
+      <option value="カンボジア">カンボジア</option>
+      <option value="日本">日本</option>
+      <option value="other">その他（直接入力）</option>
+    </select>
+    <div class="other-input" id="otherProductionPlace"><input type="text" id="productionPlaceOther" placeholder="生産地を入力" oninput="updatePreview()"></div>
+    <label style="margin-top: 15px;">その他の項目</label>
+    <p style="font-size: 0.75em; color: #888; margin-top: -8px; margin-bottom: 8px;">※自由に項目を追加できます</p>
+    <div class="dynamic-list" id="specOtherList"></div>
+    <button type="button" class="add-btn" onclick="addSpecOtherItem()">+ 項目を追加</button>
+    
+    <!-- スライダー画像 -->
+    <h2>スライダー画像</h2>
+    <p style="font-size: 0.8em; color: #888; margin-bottom: 10px;">※ドラッグまたは▲▼ボタンで並び替え可能</p>
+    <div class="dynamic-list" id="sliderList">
+      <div class="dynamic-item" draggable="true" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="drop(event, 'sliderList')" ondragend="dragEnd(event)">
+        <button type="button" class="delete-btn" onclick="deleteItem(this)">×</button>
+        <div class="image-item-wrapper">
+          <div class="move-buttons">
+            <button type="button" class="move-btn" onclick="moveItem(this, -1)">▲</button>
+            <button type="button" class="move-btn" onclick="moveItem(this, 1)">▼</button>
+          </div>
+          <div class="image-thumbnail-placeholder">画像<br>プレビュー</div>
+          <div class="image-inputs">
+            <label>画像URL</label>
+            <input type="url" class="slider-img" placeholder="https://cdn.shopify.com/..." oninput="updatePreview(); updateThumbnail(this, 'slider')">
+            <label>キャプション <button type="button" class="auto-generate-btn" onclick="generateCaption(this)">✨ 自動生成</button></label>
+            <input type="text" class="slider-caption" placeholder="例：幅広いサイズ展開" oninput="updatePreview()">
+          </div>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="add-btn" onclick="addSliderItem()">+ 画像を追加</button>
+    
+    <!-- 出力ボタン -->
+    <div class="output-buttons">
+      <button type="button" class="copy-btn" onclick="copyToClipboard()">📋 HTMLをコピー</button>
+      <button type="button" class="download-btn" onclick="downloadHTML()">💾 ダウンロード</button>
+    </div>
+    <p class="copy-success" id="copySuccess">✓ コピーしました！</p>
+  </div>
+  
+  <!-- 右側：プレビューパネル -->
+  <div class="preview-panel">
+    <div class="preview-header">
+      <span>📱 リアルタイムプレビュー</span>
+      <button class="preview-mode-btn" onclick="togglePreviewMode()">コード表示</button>
+    </div>
+    <iframe id="previewIframe" class="preview-iframe"></iframe>
+    <textarea id="codePreview" style="display:none; width:100%; height:calc(100vh - 50px); font-family:monospace; font-size:11px; padding:15px; border:none; background:#1e1e1e; color:#d4d4d4;"></textarea>
+  </div>
+</div>
+
+<script>
+let previewMode = 'visual';
+let extractedCaptions = [];
+let extractedColors = [];
+let extractedSizes = [];
+
+// ===== レビューバナー =====
+function addReviewBannerItem() {
+  const list = document.getElementById('reviewBannerList');
+  const count = list.querySelectorAll('.review-item').length;
+  if (count >= 3) { alert('レビューは最大3件までです'); return; }
+  const item = document.createElement('div');
+  item.className = 'dynamic-item review-item';
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button>
+    <div style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+      <span style="color: #E8960A; font-size: 13px;">★★★★★</span>
+    </div>
+    <label>レビュータイトル</label>
+    <input type="text" class="review-title" placeholder="例：しっかりした作り" oninput="updatePreview()">
+    <label>レビュー本文</label>
+    <textarea class="review-body" placeholder="例：お値段の割に、とてもしっかりした作りです..." oninput="updatePreview()"></textarea>
+    <label>属性タグ（任意）</label>
+    <input type="text" class="review-tags" placeholder="例：実用品・普段使い｜自分用｜はじめて" oninput="updatePreview()">
+    <label>キャプション（青帯メッセージ）</label>
+    <input type="text" class="review-caption" placeholder="例：お値段以上！しっかりした作りでたっぷり収納力" oninput="updatePreview()">`;
+  list.appendChild(item);
+  updatePreview();
+}
+
+// ===== バナー画像 =====
+function addBannerImageItem() {
+  const list = document.getElementById('bannerImageList');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item banner-img-item';
+  item.draggable = true;
+  item.ondragstart = dragStart;
+  item.ondragover = dragOver;
+  item.ondrop = function(e) { drop(e, 'bannerImageList'); };
+  item.ondragend = dragEnd;
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button>
+    <div class="image-item-wrapper">
+      <div class="move-buttons">
+        <button type="button" class="move-btn" onclick="moveItem(this, -1)">▲</button>
+        <button type="button" class="move-btn" onclick="moveItem(this, 1)">▼</button>
+      </div>
+      <div class="image-thumbnail-placeholder">画像<br>プレビュー</div>
+      <div class="image-inputs">
+        <label>画像URL</label>
+        <input type="url" class="banner-img-url" placeholder="https://cdn.shopify.com/..." oninput="updatePreview(); updateThumbnail(this, 'banner')">
+        <label>リンク先URL（任意）</label>
+        <input type="url" class="banner-img-link" placeholder="例：https://kabag.jp/pages/..." oninput="updatePreview()">
+      </div>
+    </div>`;
+  list.appendChild(item);
+  updatePreview();
+}
+
+// ===== タブ切り替え =====
+function switchLoadTab(tab) {
+  document.getElementById('loadTabNewPage').style.display = tab === 'newPage' ? 'block' : 'none';
+  document.getElementById('loadTabEditHtml').style.display = tab === 'editHtml' ? 'block' : 'none';
+  document.getElementById('tabNewPage').classList.toggle('active', tab === 'newPage');
+  document.getElementById('tabEditHtml').classList.toggle('active', tab === 'editHtml');
+}
+
+// ===== 共通ユーティリティ =====
+function deleteItem(btn) {
+  const item = btn.closest('.dynamic-item');
+  if (item) { const imgInput = item.querySelector('.detail-img, .slider-img'); if (imgInput && imgInput.value) releaseImageFromUsed(imgInput.value); item.remove(); updatePreview(); }
+}
+function releaseImageFromUsed(url) {
+  const imageGrid = document.getElementById('imageGrid');
+  if (!imageGrid) return;
+  imageGrid.querySelectorAll('.image-grid-item').forEach(item => {
+    const itemUrl = item.getAttribute('data-url');
+    if (url.split('?')[0] === (itemUrl || '').split('?')[0]) item.classList.remove('used');
+  });
+}
+function toggleOtherInput() {
+  const select = document.getElementById('productionPlace');
+  document.getElementById('otherProductionPlace').classList.toggle('active', select.value === 'other');
+}
+function toggleMaterialOther(type) {
+  const select = document.getElementById('material' + type);
+  document.getElementById('otherMaterial' + type).classList.toggle('active', select.value === 'other');
+}
+function addBeforePurchaseItem() {
+  const list = document.getElementById('beforePurchaseList');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item';
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><label>項目</label><input type="text" class="before-purchase-other" placeholder="例：折りたたみ傘収納OK" oninput="updatePreview()">`;
+  list.appendChild(item);
+  updatePreview();
+}
+function addFaqItem() {
+  const list = document.getElementById('faqList');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item';
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><label>質問</label><input type="text" class="faq-q" placeholder="質問を入力" oninput="updatePreview()"><label>回答</label><textarea class="faq-a" placeholder="回答を入力" oninput="updatePreview()"></textarea>`;
+  list.appendChild(item);
+  updatePreview();
+}
+function addDetailItem() {
+  const list = document.getElementById('productDetailList');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item';
+  item.draggable = true; item.ondragstart = dragStart; item.ondragover = dragOver; item.ondrop = function(e) { drop(e, 'productDetailList'); }; item.ondragend = dragEnd;
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><div class="image-item-wrapper"><div class="move-buttons"><button type="button" class="move-btn" onclick="moveItem(this, -1)">▲</button><button type="button" class="move-btn" onclick="moveItem(this, 1)">▼</button></div><div class="image-thumbnail-placeholder">画像<br>プレビュー</div><div class="image-inputs"><label>画像URL</label><input type="url" class="detail-img" placeholder="https://cdn.shopify.com/..." oninput="updatePreview(); updateThumbnail(this, 'detail')"><label>キャプション <button type="button" class="auto-generate-btn" onclick="generateCaption(this)">✨ 自動生成</button></label><textarea class="detail-caption" placeholder="例：ストレートに素材を感じてもらえるシンプルなデザイン。" oninput="updatePreview()"></textarea></div></div>`;
+  list.appendChild(item);
+  updatePreview();
+}
+function addSliderItem() {
+  const list = document.getElementById('sliderList');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item';
+  item.draggable = true; item.ondragstart = dragStart; item.ondragover = dragOver; item.ondrop = function(e) { drop(e, 'sliderList'); }; item.ondragend = dragEnd;
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><div class="image-item-wrapper"><div class="move-buttons"><button type="button" class="move-btn" onclick="moveItem(this, -1)">▲</button><button type="button" class="move-btn" onclick="moveItem(this, 1)">▼</button></div><div class="image-thumbnail-placeholder">画像<br>プレビュー</div><div class="image-inputs"><label>画像URL</label><input type="url" class="slider-img" placeholder="https://cdn.shopify.com/..." oninput="updatePreview(); updateThumbnail(this, 'slider')"><label>キャプション <button type="button" class="auto-generate-btn" onclick="generateCaption(this)">✨ 自動生成</button></label><input type="text" class="slider-caption" placeholder="例：幅広いサイズ展開" oninput="updatePreview()"></div></div>`;
+  list.appendChild(item);
+  updatePreview();
+}
+function addColorItem() {
+  const list = document.getElementById('colorList');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item color-item';
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><input type="text" class="color-input" placeholder="例：ネイビー（内装ライトブルー）" oninput="updatePreview()">`;
+  list.appendChild(item);
+  updatePreview();
+}
+function addSpecOtherItem() {
+  const list = document.getElementById('specOtherList');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item spec-other-item';
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><div class="spec-other-inputs"><input type="text" class="spec-other-label" placeholder="項目名（例：ポケット数）" oninput="updatePreview()"><input type="text" class="spec-other-value" placeholder="値（例：5つ）" oninput="updatePreview()"></div>`;
+  list.appendChild(item);
+  updatePreview();
+}
+function addBeforePurchaseItemWithValue(value) {
+  const list = document.getElementById('beforePurchaseList');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item';
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><label>項目</label><input type="text" class="before-purchase-other" value="${value}" oninput="updatePreview()">`;
+  list.appendChild(item);
+}
+
+// ===== キャプション自動生成 =====
+function generateCaption(btn) {
+  const inputWrapper = btn.closest('.image-inputs');
+  const captionInput = inputWrapper.querySelector('.detail-caption, .slider-caption');
+  if (extractedCaptions.length === 0) { alert('キャプション候補がありません。'); return; }
+  const existingPopup = document.querySelector('.caption-suggest-popup');
+  if (existingPopup) existingPopup.remove();
+  const popup = document.createElement('div');
+  popup.className = 'caption-suggest-popup';
+  popup.innerHTML = `<div class="caption-suggest-header"><span>📝 キャプション候補</span><button type="button" onclick="this.closest('.caption-suggest-popup').remove()">✕</button></div><div class="caption-suggest-list">${extractedCaptions.map(c => `<div class="caption-suggest-item" onclick="selectCaption(this, '${c.replace(/'/g, "\\'")}')">${c}</div>`).join('')}</div>`;
+  inputWrapper.appendChild(popup);
+}
+function selectCaption(item, caption) {
+  const popup = item.closest('.caption-suggest-popup');
+  const inputWrapper = popup.closest('.image-inputs');
+  const captionInput = inputWrapper.querySelector('.detail-caption, .slider-caption');
+  captionInput.value = caption;
+  popup.remove();
+  updatePreview();
+}
+function generateColorSuggest() {
+  if (extractedColors.length === 0) { alert('カラー候補がありません。'); return; }
+  const existingPopup = document.querySelector('.color-suggest-popup');
+  if (existingPopup) existingPopup.remove();
+  const colorList = document.getElementById('colorList');
+  const popup = document.createElement('div');
+  popup.className = 'caption-suggest-popup color-suggest-popup';
+  popup.innerHTML = `<div class="caption-suggest-header"><span>🎨 カラー候補</span><button type="button" onclick="this.closest('.color-suggest-popup').remove()">✕</button></div><div class="caption-suggest-list">${extractedColors.map(c => `<div class="caption-suggest-item" onclick="addColorFromSuggest('${c.replace(/'/g, "\\'")}')">${c}</div>`).join('')}</div>`;
+  colorList.parentElement.insertBefore(popup, colorList.nextSibling);
+}
+function addColorFromSuggest(color) {
+  const list = document.getElementById('colorList');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item color-item';
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><input type="text" class="color-input" value="${color}" oninput="updatePreview()">`;
+  list.appendChild(item);
+  updatePreview();
+}
+function generateSizeSuggest() {
+  if (extractedSizes.length === 0) { alert('サイズ候補がありません。'); return; }
+  const sizeInput = document.getElementById('size');
+  const existingPopup = document.querySelector('.size-suggest-popup');
+  if (existingPopup) existingPopup.remove();
+  const popup = document.createElement('div');
+  popup.className = 'caption-suggest-popup size-suggest-popup';
+  popup.style.position = 'absolute'; popup.style.width = '100%';
+  popup.innerHTML = `<div class="caption-suggest-header"><span>📏 サイズ候補</span><button type="button" onclick="this.closest('.size-suggest-popup').remove()">✕</button></div><div class="caption-suggest-list">${extractedSizes.map(s => `<div class="caption-suggest-item" onclick="selectSize('${s.replace(/'/g, "\\'")}')">${s}</div>`).join('')}</div>`;
+  sizeInput.parentElement.style.position = 'relative';
+  sizeInput.parentElement.appendChild(popup);
+}
+function selectSize(size) { document.getElementById('size').value = size; const popup = document.querySelector('.size-suggest-popup'); if (popup) popup.remove(); updatePreview(); }
+
+// ===== プレビュー =====
+function togglePreviewMode() {
+  const iframe = document.getElementById('previewIframe');
+  const codeArea = document.getElementById('codePreview');
+  const btn = document.querySelector('.preview-mode-btn');
+  if (previewMode === 'visual') { previewMode = 'code'; iframe.style.display = 'none'; codeArea.style.display = 'block'; btn.textContent = 'プレビュー表示'; codeArea.value = generateHTMLCode(); }
+  else { previewMode = 'visual'; iframe.style.display = 'block'; codeArea.style.display = 'none'; btn.textContent = 'コード表示'; }
+}
+
+// ===== HTML生成 =====
+function generateHTMLCode() {
+  const productSubtitle = document.getElementById('productSubtitle').value || '';
+  const productCategory = document.getElementById('productCategory').value || '';
+  const productName = document.getElementById('productName').value || '商品名';
+  const youtubeUrl = document.getElementById('youtubeUrl').value;
+
+  // レビューバナー
+  const reviewItems = [];
+  document.querySelectorAll('#reviewBannerList .review-item').forEach((item, idx) => {
+    const title = item.querySelector('.review-title').value;
+    const body = item.querySelector('.review-body').value;
+    const tags = item.querySelector('.review-tags').value;
+    const caption = item.querySelector('.review-caption').value;
+    if (title || body) reviewItems.push({ title, body, tags, caption, isFirst: idx === 0 });
+  });
+
+  // バナー画像
+  const bannerImages = [];
+  document.querySelectorAll('#bannerImageList .banner-img-item').forEach(item => {
+    const url = item.querySelector('.banner-img-url').value;
+    const link = item.querySelector('.banner-img-link').value;
+    if (url) bannerImages.push({ url, link });
+  });
+
+  const checkboxes = document.querySelectorAll('#beforePurchaseCheckboxes input[type="checkbox"]:checked');
+  let beforePurchaseItems = Array.from(checkboxes).map(cb => cb.value);
+  document.querySelectorAll('.before-purchase-other').forEach(item => { if (item.value.trim()) beforePurchaseItems.push(item.value.trim()); });
+  const faqItems = [];
+  document.querySelectorAll('#faqList .dynamic-item').forEach(item => { const q = item.querySelector('.faq-q').value; const a = item.querySelector('.faq-a').value; if (q && a) faqItems.push({ q, a }); });
+  const detailItems = [];
+  document.querySelectorAll('#productDetailList .dynamic-item').forEach(item => { const img = item.querySelector('.detail-img').value; const caption = item.querySelector('.detail-caption')?.value || ''; if (img) detailItems.push({ img, caption }); });
+  const capacity = document.getElementById('capacity').value;
+  const weight = document.getElementById('weight').value;
+  const size = document.getElementById('size').value;
+  const materialMainSelect = document.getElementById('materialMain').value;
+  const materialMain = materialMainSelect === 'other' ? document.getElementById('materialMainOther').value : materialMainSelect;
+  const materialLiningSelect = document.getElementById('materialLining').value;
+  const materialLining = materialLiningSelect === 'other' ? document.getElementById('materialLiningOther').value : materialLiningSelect;
+  const colorItems = [];
+  document.querySelectorAll('#colorList .color-input').forEach(input => { if (input.value.trim()) colorItems.push(input.value.trim()); });
+  const productionPlaceSelect = document.getElementById('productionPlace').value;
+  const productionPlace = productionPlaceSelect === 'other' ? document.getElementById('productionPlaceOther').value : productionPlaceSelect;
+  const specOtherItems = [];
+  document.querySelectorAll('#specOtherList .spec-other-item').forEach(item => { const l = item.querySelector('.spec-other-label').value.trim(); const v = item.querySelector('.spec-other-value').value.trim(); if (l && v) specOtherItems.push({ label: l, value: v }); });
+  const sliderItems = [];
+  document.querySelectorAll('#sliderList .dynamic-item').forEach(item => { const img = item.querySelector('.slider-img').value; const caption = item.querySelector('.slider-caption')?.value || ''; if (img) sliderItems.push({ img, caption }); });
+
+  let html = `<!-- ============================================
+     ${productName} 商品ページ
+     CSSのみでタブ/アコーディオン機能を実現
+     （JavaScript不要・Shopify商品説明欄用）
+     ============================================ -->
+
+<style>
+/* ========== アコーディオン ========== */
+.kabag-accordion { border: 1px solid #e0e0e0; margin-bottom: -1px; }
+.kabag-accordion input[type="checkbox"] { display: none; }
+.kabag-accordion-label { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #fff; cursor: pointer; font-weight: bold; font-size: 14px; color: #333; }
+.kabag-accordion-label:hover { background: #f9f9f9; }
+.kabag-accordion-label::after { content: "▼"; font-size: 12px; transition: transform 0.3s; }
+.kabag-accordion input[type="checkbox"]:checked + .kabag-accordion-label::after { transform: rotate(180deg); }
+.kabag-accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; background: #fafafa; font-size: 14px; line-height: 1.8; color: #555; }
+.kabag-accordion input[type="checkbox"]:checked ~ .kabag-accordion-content { max-height: 1000px; padding: 20px; border-top: 1px solid #e0e0e0; }
+/* ========== 横タブ ========== */
+.kabag-tabs-wrapper { margin-top: 30px; }
+.kabag-tabs-wrapper input[type="radio"] { display: none; }
+.kabag-tabs-nav { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: stretch !important; justify-content: stretch !important; border-bottom: 2px solid #e0e0e0; width: 100%; margin: 0 !important; padding: 0 !important; }
+.kabag-tabs-nav label { flex: 1 1 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; padding: 14px 8px !important; margin: 0 !important; cursor: pointer; font-weight: bold; font-size: 14px; color: #888; border: none !important; border-bottom: 2px solid transparent !important; margin-bottom: -2px !important; transition: all 0.3s; min-height: 50px !important; box-sizing: border-box !important; line-height: 1.3 !important; background: transparent !important; }
+.kabag-tabs-nav label:hover { color: #333; }
+#kabag-tab1:checked ~ .kabag-tabs-nav label[for="kabag-tab1"],
+#kabag-tab2:checked ~ .kabag-tabs-nav label[for="kabag-tab2"] { color: #333; border-bottom: 2px solid #E8960A !important; }
+.kabag-tab-content { display: none; padding: 30px 0; }
+#kabag-tab1:checked ~ .kabag-tab-content.tab1-content,
+#kabag-tab2:checked ~ .kabag-tab-content.tab2-content { display: block; }
+/* ========== 画像セクション ========== */
+.kabag-image-section { text-align: center; margin-bottom: 40px; }
+.kabag-image-section img { max-width: 100%; }
+.kabag-image-section p { font-size: 1.1em; margin-top: 16px; color: #333; }
+/* ========== スライダー ========== */
+.kabag-slider { margin-top: 40px; position: relative; }
+.kabag-slider-title { text-align: center; font-size: 1.2em; font-weight: bold; margin-bottom: 20px; color: #333; }
+.kabag-slider-wrapper { position: relative; }
+.kabag-slider-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; background: rgba(0,0,0,0.45); color: #fff; border-radius: 50%; font-size: 1.2em; font-weight: bold; z-index: 10; pointer-events: none; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.kabag-slider-arrow-left { left: 8px; }
+.kabag-slider-arrow-right { right: 8px; }
+.kabag-slider-container { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; gap: 0; padding: 0 24px; }
+.kabag-slider-container::-webkit-scrollbar { display: none; }
+.kabag-slider-item { flex: 0 0 88%; scroll-snap-align: center; overflow: hidden; display: flex; flex-direction: column; box-sizing: border-box; margin: 0 6px; border-radius: 8px; border: 1px solid #e0e0e0; }
+.kabag-slider-item img { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; object-position: center; display: block; background: #fff; }
+.kabag-slider-caption { text-align: center; padding: 12px 10px; font-size: 0.95em; color: #333; background: #fff; min-height: 80px; display: flex; align-items: center; justify-content: center; }
+/* ========== メインビジュアル ========== */
+.kabag-main-visual { margin-bottom: 50px; }
+.kabag-title-block { margin-top: 20px; }
+.kabag-subtitle { font-size: 0.9em; color: #666; margin: 0 0 8px 0; }
+.kabag-category { font-size: 1.3em; font-weight: bold; color: #333; margin: 0 0 4px 0; }
+.kabag-product-name { font-size: 1.8em; font-weight: bold; color: #333; margin: 0; }
+/* ========== レビューバナー ========== */
+.kabag-review-banner { padding: 30px 0 20px; border-bottom: 2px solid #E8960A; }
+.kabag-review-banner a { text-decoration: none; color: inherit; display: block; }
+.kabag-review-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 18px; margin-bottom: 14px; position: relative; }
+.kabag-review-card:last-child { margin-bottom: 0; }
+.kabag-review-caption { color: #fff; padding: 8px 14px; border-radius: 6px; margin-top: 12px; font-size: 12px; font-weight: bold; text-align: center; line-height: 1.5; }
+</style>
+
+`;
+
+  // YouTube
+  if (youtubeUrl) {
+    html += `<!-- YouTube動画 -->
+<div style="text-align: center; margin: 20px 0 40px 0;">
+  <div style="position: relative; width: 100%; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+    <iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" src="${youtubeUrl}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+  </div>
+</div>
+
+`;
+  }
+
+  // レビューバナー
+  if (reviewItems.length > 0) {
+    html += `<!-- レビューバナー -->
+<div class="kabag-review-banner">
+  <a href="#judgeme_product_reviews">
+  <div style="text-align: center; margin-bottom: 24px;">
+    <p style="margin: 0; color: #E8960A; font-size: 12px; font-weight: bold; letter-spacing: 2px;">★ HIGH REVIEW ★</p>
+    <p style="margin: 8px 0 0; color: #333; font-size: 20px; font-weight: 900; line-height: 1.4;">お客様のリアルな声</p>
+    <p style="margin: 4px 0 0; color: #888; font-size: 12px;">たくさんの方に選ばれています</p>
+  </div>
+`;
+    reviewItems.forEach((r, idx) => {
+      const captionBg = idx === 0 ? '#4A90A4' : '#4A90A4';
+      html += `  <div class="kabag-review-card">
+${r.isFirst ? '    <div style="position: absolute; top: -1px; left: 20px; background: #E8960A; color: #fff; font-size: 10px; font-weight: bold; padding: 3px 10px; border-radius: 0 0 6px 6px;">BEST REVIEW</div>\n' : ''}    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;${r.isFirst ? ' margin-top: 8px;' : ''}">
+      <span style="color: #E8960A; font-size: 14px; letter-spacing: 2px;">★★★★★</span>
+    </div>
+    <p style="margin: 0 0 6px; color: #333; font-size: 14px; font-weight: bold;">${r.title}</p>
+    <p style="margin: 0; color: #555; font-size: 12px; line-height: 1.8;">${r.body}</p>
+${r.tags ? `    <p style="margin: 6px 0 0; color: #aaa; font-size: 10px;">${r.tags}</p>\n` : ''}${r.caption ? `    <div class="kabag-review-caption" style="background: ${captionBg};">${r.caption}</div>\n` : ''}  </div>
+`;
+    });
+    html += `  </a>
+</div>
+
+`;
+  }
+
+  // バナー画像
+  if (bannerImages.length > 0) {
+    html += `<!-- バナー画像 -->\n`;
+    bannerImages.forEach(b => {
+      const imgTag = `<img src="${b.url}" alt="バナー" style="max-width: 100%; display: block;">`;
+      if (b.link) {
+        html += `<div style="text-align: center; margin: 10px 0;"><a href="${b.link}">${imgTag}</a></div>\n`;
+      } else {
+        html += `<div style="text-align: center; margin: 10px 0;">${imgTag}</div>\n`;
+      }
+    });
+    html += `\n`;
+  }
+
+  // アコーディオン（購入前=checked）
+  html += `<!-- アコーディオン -->
+<div class="kabag-accordion">
+  <input type="checkbox" id="acc1" checked>
+  <label class="kabag-accordion-label" for="acc1">購入前に知っておきたいこと</label>
+  <div class="kabag-accordion-content">
+`;
+  beforePurchaseItems.forEach(item => { html += `    <p>☑️ ${item}</p>\n`; });
+  html += `  </div>
+</div>
+
+<div class="kabag-accordion">
+  <input type="checkbox" id="acc2">
+  <label class="kabag-accordion-label" for="acc2">よくある質問</label>
+  <div class="kabag-accordion-content">
+`;
+  faqItems.forEach((faq, index) => {
+    const mt = index > 0 ? ' style="margin-top: 16px;"' : '';
+    html += `    <p${mt}><strong>Q：${faq.q}</strong><br>\n    A：${faq.a}</p>\n`;
+  });
+  html += `  </div>
+</div>
+
+<div class="kabag-accordion">
+  <input type="checkbox" id="acc3">
+  <label class="kabag-accordion-label" for="acc3">30日間返金保証について</label>
+  <div class="kabag-accordion-content">
+    <p><strong>30日間返金保証の対象は「屋内試用のみ」となります。</strong><br>
+    返金をご希望の際は、商品到着後30日以内に【返金希望用紙】を同梱し、着払いにてご返送ください。</p>
+    <div style="background: #f0f8f0; padding: 12px; border-radius: 6px; margin: 16px 0;">
+      <p style="margin: 0 0 8px 0; color: #2e7d32;"><strong>✓ OK（返品対象）</strong></p>
+      <p style="margin: 0; font-size: 0.95em;">・室内での収納テスト・ポーチ確認<br>・鏡の前での背負い心地チェック<br>・床置きする場合は、シート等を敷いたうえで短時間の確認</p>
+    </div>
+    <div style="background: #fef0f0; padding: 12px; border-radius: 6px; margin: 16px 0;">
+      <p style="margin: 0 0 8px 0; color: #c62828;"><strong>✗ NG（返金対象外または減額）</strong></p>
+      <p style="margin: 0; font-size: 0.95em;">・屋外での持ち出し・使用（通勤・通学・買い物・旅行・撮影など）<br>・雨・雪・水濡れ、衣類や他製品からの色移り、圧迫による変形<br>・香水・お香・タバコ等のにおいの付着<br>・付属品（箱・タグ・説明書）の欠品・破損</p>
+    </div>
+    <p style="margin-top: 16px; font-size: 0.95em;"><strong>Q. 玄関先やベランダで背負い心地を確認しても大丈夫ですか？</strong><br>A. 屋内の範囲で、短時間であれば問題ありません。</p>
+    <p style="font-size: 0.95em;"><strong>Q. タグを一度外してしまっても大丈夫ですか？</strong><br>A. 商品の価値を大きく損なわない範囲であれば原則として受け付けます。ただし、タグは保管し、返品時に必ず同梱してください。</p>
+  </div>
+</div>
+
+`;
+
+  // 横タブ（2つのみ）
+  html += `<!-- 横タブ -->
+<div class="kabag-tabs-wrapper">
+  <input type="radio" name="kabag-tabs" id="kabag-tab1" checked>
+  <input type="radio" name="kabag-tabs" id="kabag-tab2">
+  <div class="kabag-tabs-nav">
+    <label for="kabag-tab1">商品詳細</label>
+    <label for="kabag-tab2">サイズ・素材</label>
+  </div>
+  
+  <div class="kabag-tab-content tab1-content">
+`;
+  detailItems.forEach((detail, index) => {
+    if (index === 0) {
+      html += `    <div class="kabag-image-section kabag-main-visual">
+      <img src="${detail.img}" alt="メインビジュアル">
+      <div class="kabag-title-block">
+        ${productSubtitle ? `<p class="kabag-subtitle">${productSubtitle}</p>` : ''}
+        ${productCategory ? `<p class="kabag-category">${productCategory}</p>` : ''}
+        <p class="kabag-product-name">${productName}</p>
+      </div>
+    </div>
+`;
+    } else {
+      html += `    <div class="kabag-image-section">
+      <img src="${detail.img}" alt="商品画像${index + 1}">
+      ${detail.caption ? `<p>${detail.caption}</p>` : ''}
+    </div>
+`;
+    }
+  });
+
+  if (sliderItems.length > 0) {
+    html += `    <div class="kabag-slider">
+      <p class="kabag-slider-title">商品仕様ギャラリー</p>
+      <div class="kabag-slider-wrapper">
+        <span class="kabag-slider-arrow kabag-slider-arrow-left">＜</span>
+        <span class="kabag-slider-arrow kabag-slider-arrow-right">＞</span>
+        <div class="kabag-slider-container">
+          <div class="kabag-slider-item" style="display: none;"></div>
+`;
+    sliderItems.forEach((item, index) => {
+      html += `          <div class="kabag-slider-item" id="slide-${index}">
+            <img src="${item.img}" alt="商品画像${index + 1}">
+            ${item.caption ? `<p class="kabag-slider-caption">${item.caption}</p>` : ''}
+          </div>\n`;
+    });
+    html += `        </div>
+      </div>
+    </div>
+`;
+  }
+
+  html += `  </div>
+  
+  <div class="kabag-tab-content tab2-content">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 30px;">
+`;
+  if (capacity) html += `      <tr style="border-bottom: 1px solid #e0e0e0;"><td style="padding: 12px 0; width: 35%; color: #888;">容量</td><td style="padding: 12px 0;">　${capacity}</td></tr>\n`;
+  if (weight) html += `      <tr style="border-bottom: 1px solid #e0e0e0;"><td style="padding: 12px 0; color: #888;">重さ</td><td style="padding: 12px 0;">　${weight}</td></tr>\n`;
+  if (size) html += `      <tr style="border-bottom: 1px solid #e0e0e0;"><td style="padding: 12px 0; color: #888;">サイズ</td><td style="padding: 12px 0;">　${size}</td></tr>\n`;
+  if (materialMain) html += `      <tr style="border-bottom: 1px solid #e0e0e0;"><td style="padding: 12px 0; color: #888;">素材（本体）</td><td style="padding: 12px 0;">　${materialMain}</td></tr>\n`;
+  if (materialLining) html += `      <tr style="border-bottom: 1px solid #e0e0e0;"><td style="padding: 12px 0; color: #888;">素材（裏地）</td><td style="padding: 12px 0;">　${materialLining}</td></tr>\n`;
+  if (colorItems.length > 0) html += `      <tr style="border-bottom: 1px solid #e0e0e0;"><td style="padding: 12px 0; width: 35%; color: #888; vertical-align: top;">カラー</td><td style="padding: 12px 0;">　${colorItems.join('<br>　')}</td></tr>\n`;
+  if (productionPlace) html += `      <tr style="border-bottom: 1px solid #e0e0e0;"><td style="padding: 12px 0; color: #888;">生産地</td><td style="padding: 12px 0;">　${productionPlace}</td></tr>\n`;
+  specOtherItems.forEach(item => { html += `      <tr style="border-bottom: 1px solid #e0e0e0;"><td style="padding: 12px 0; color: #888;">${item.label}</td><td style="padding: 12px 0;">　${item.value}</td></tr>\n`; });
+  html += `    </table>
+    <p style="font-size: 0.9em; color: #888;">【注意事項】<br>・モニター環境により、実際の色味と異なる場合があります。<br>・光の当たり具合によっても、色味が違って見えることがあります。</p>
+  </div>
+</div>
+
+<!-- Judge.me レビューウィジェット（タブ外） -->
+<div id="judgeme_product_reviews" style="margin-top: 30px;">
+  <div class="jdgm-widget jdgm-review-widget"></div>
+</div>
+`;
+  return html;
+}
+
+function updatePreview() {
+  const html = generateHTMLCode();
+  const iframe = document.getElementById('previewIframe');
+  const codeArea = document.getElementById('codePreview');
+  const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+  iframeDoc.open();
+  iframeDoc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; margin: 0; }</style></head><body>${html}</body></html>`);
+  iframeDoc.close();
+  if (previewMode === 'code') codeArea.value = html;
+}
+
+function copyToClipboard() {
+  const html = generateHTMLCode();
+  navigator.clipboard.writeText(html).then(() => {
+    const successMsg = document.getElementById('copySuccess');
+    successMsg.style.display = 'block';
+    setTimeout(() => { successMsg.style.display = 'none'; }, 2000);
+  });
+}
+
+function downloadHTML() {
+  const content = generateHTMLCode();
+  const productName = document.getElementById('productName').value || 'kabag_product';
+  const blob = new Blob([content], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${productName.replace(/\s+/g, '_')}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+window.onload = function() {
+  loadJudgemeSettings();
+  updatePreview();
+};
+
+// ===== Judge.me API =====
+function saveJudgemeSettings() {
+  const settings = {
+    shopDomain: document.getElementById('judgemeShopDomain').value,
+    apiToken: document.getElementById('judgemeApiToken').value
+  };
+  try { localStorage.setItem('kabag_judgeme_settings', JSON.stringify(settings)); showJudgemeStatus('設定を保存しました', 'success'); } catch(e) { showJudgemeStatus('保存に失敗しました', 'error'); }
+}
+
+function loadJudgemeSettings() {
+  try {
+    const saved = localStorage.getItem('kabag_judgeme_settings');
+    if (saved) {
+      const settings = JSON.parse(saved);
+      document.getElementById('judgemeShopDomain').value = settings.shopDomain || '';
+      document.getElementById('judgemeApiToken').value = settings.apiToken || '';
+    }
+  } catch(e) {}
+}
+
+function showJudgemeStatus(msg, type) {
+  const el = document.getElementById('judgemeStatus');
+  el.style.display = 'block';
+  el.textContent = msg;
+  el.style.background = type === 'success' ? '#e8f5e9' : type === 'error' ? '#fce4ec' : '#fff8e1';
+  el.style.color = type === 'success' ? '#2e7d32' : type === 'error' ? '#c62828' : '#f57f17';
+  if (type === 'success') setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+function extractProductHandle(input) {
+  let value = input || '';
+  // URLからハンドルを抽出
+  const urlMatch = value.match(/\/products\/([a-z0-9\-]+)/i);
+  if (urlMatch) return urlMatch[1];
+  // すでにハンドル形式ならそのまま
+  return value.trim();
+}
+
+async function fetchJudgemeReviews() {
+  const shopDomain = document.getElementById('judgemeShopDomain').value.trim();
+  const apiToken = document.getElementById('judgemeApiToken').value.trim();
+  const productHandleInput = document.getElementById('judgemeProductHandle').value.trim();
+  
+  if (!shopDomain || !apiToken) { showJudgemeStatus('Shop DomainとAPI Tokenを入力してください', 'error'); return; }
+  if (!productHandleInput) { showJudgemeStatus('商品URLまたはハンドルを入力してください', 'error'); return; }
+  
+  const handle = extractProductHandle(productHandleInput);
+  document.getElementById('judgemeProductHandle').value = handle;
+  
+  showJudgemeStatus('レビューを取得中...', 'loading');
+  
+  try {
+    // Judge.me Reviews API - 高評価順で取得
+    const url = `https://judge.me/api/v1/reviews?shop_domain=${encodeURIComponent(shopDomain)}&api_token=${encodeURIComponent(apiToken)}&handle=${encodeURIComponent(handle)}&rating=5&per_page=10&sort_by=most_helpful`;
+    
+    const response = await fetch(url);
+    if (!response.ok) {
+      // フォールバック: product_reviewウィジェットAPIを試す
+      const widgetUrl = `https://judge.me/api/v1/widgets/product_review?api_token=${encodeURIComponent(apiToken)}&shop_domain=${encodeURIComponent(shopDomain)}&handle=${encodeURIComponent(handle)}`;
+      const widgetResponse = await fetch(widgetUrl);
+      if (!widgetResponse.ok) throw new Error('API応答エラー: ' + response.status);
+      
+      // ウィジェットHTMLからレビューを解析
+      const widgetData = await widgetResponse.json();
+      if (widgetData.widget) {
+        parseWidgetReviews(widgetData.widget);
+        return;
+      }
+      throw new Error('レビューデータが見つかりません');
+    }
+    
+    const data = await response.json();
+    
+    if (data.reviews && data.reviews.length > 0) {
+      populateReviewBanner(data.reviews.slice(0, 3));
+      showJudgemeStatus(`${Math.min(data.reviews.length, 3)}件のレビューを取得しました！キャプションは手動で追加してください`, 'success');
+    } else {
+      // レビューAPIで結果がない場合、ウィジェットAPIを試す
+      showJudgemeStatus('レビューAPIで結果なし。ウィジェットAPIを試行中...', 'loading');
+      const widgetUrl = `https://judge.me/api/v1/widgets/product_review?api_token=${encodeURIComponent(apiToken)}&shop_domain=${encodeURIComponent(shopDomain)}&handle=${encodeURIComponent(handle)}`;
+      const widgetResponse = await fetch(widgetUrl);
+      if (widgetResponse.ok) {
+        const widgetData = await widgetResponse.json();
+        if (widgetData.widget) {
+          parseWidgetReviews(widgetData.widget);
+          return;
+        }
+      }
+      showJudgemeStatus('星5のレビューが見つかりません。ハンドルを確認してください', 'error');
+    }
+  } catch (e) {
+    console.error('Judge.me API error:', e);
+    showJudgemeStatus('取得エラー: ' + e.message + '\nShop Domain・Token・商品ハンドルを確認してください', 'error');
+  }
+}
+
+function parseWidgetReviews(widgetHtml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(widgetHtml, 'text/html');
+  const reviewEls = doc.querySelectorAll('.jdgm-rev');
+  const reviews = [];
+  
+  reviewEls.forEach(el => {
+    const rating = el.querySelectorAll('.jdgm-star.jdgm--on').length || el.querySelector('[data-score]')?.getAttribute('data-score') || 5;
+    if (rating < 5) return; // 星5のみ
+    const title = el.querySelector('.jdgm-rev__title')?.textContent.trim() || '';
+    const body = el.querySelector('.jdgm-rev__body')?.textContent.trim() || '';
+    if (title || body) reviews.push({ title, body, rating: 5 });
+  });
+  
+  if (reviews.length > 0) {
+    populateReviewBanner(reviews.slice(0, 3));
+    showJudgemeStatus(`${Math.min(reviews.length, 3)}件のレビューを取得しました！キャプションは手動で追加してください`, 'success');
+  } else {
+    showJudgemeStatus('ウィジェットからレビューを解析できませんでした', 'error');
+  }
+}
+
+function populateReviewBanner(reviews) {
+  const list = document.getElementById('reviewBannerList');
+  list.innerHTML = '';
+  
+  reviews.forEach((review, idx) => {
+    const item = document.createElement('div');
+    item.className = 'dynamic-item review-item';
+    
+    const title = (review.title || '').replace(/"/g, '&quot;');
+    const body = (review.body || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const reviewer = review.reviewer ? review.reviewer.name || '' : '';
+    
+    const bestTag = idx === 0 ? '<span style="background: #E8960A; color: #fff; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px;">BEST REVIEW</span>' : '';
+    const stars = '★'.repeat(review.rating || 5);
+    
+    item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button>
+      <div style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+        ${bestTag}
+        <span style="color: #E8960A; font-size: 13px;">${stars}</span>
+      </div>
+      <label>レビュータイトル</label>
+      <input type="text" class="review-title" value="${title}" oninput="updatePreview()">
+      <label>レビュー本文</label>
+      <textarea class="review-body" oninput="updatePreview()">${body}</textarea>
+      <label>属性タグ（任意）</label>
+      <input type="text" class="review-tags" placeholder="例：実用品・普段使い｜自分用｜リピート" oninput="updatePreview()">
+      <label>キャプション（青帯メッセージ）</label>
+      <input type="text" class="review-caption" placeholder="※手動で追加してください" oninput="updatePreview()">`;
+    list.appendChild(item);
+  });
+  
+  updatePreview();
+}
+
+function extractYoutubeUrl(input) {
+  let value = input.value.trim();
+  if (value.includes('<iframe') || value.includes('&lt;iframe')) {
+    const srcMatch = value.match(/src=["']([^"']+)["']/);
+    if (srcMatch && srcMatch[1]) { input.value = srcMatch[1].replace(/&amp;/g, '&'); }
+  } else if (value.includes('youtube.com/watch') || value.includes('youtu.be/')) {
+    let videoId = '';
+    if (value.includes('youtube.com/watch')) { const urlParams = new URLSearchParams(value.split('?')[1]); videoId = urlParams.get('v'); }
+    else if (value.includes('youtu.be/')) { videoId = value.split('youtu.be/')[1].split('?')[0].split('&')[0]; }
+    if (videoId) input.value = 'https://www.youtube.com/embed/' + videoId;
+  }
+}
+
+function parseHTMLSource() {
+  const source = document.getElementById('htmlSource').value;
+  if (!source.trim()) { alert('HTMLソースを貼り付けてください'); return; }
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(source, 'text/html');
+  const title = doc.querySelector('h1')?.textContent || doc.querySelector('title')?.textContent || '';
+  if (title) document.getElementById('productName').value = title.trim().replace(/\s+/g, ' ');
+  const youtubeIframe = doc.querySelector('iframe[src*="youtube.com"], iframe[src*="youtu.be"]');
+  if (youtubeIframe) { const src = youtubeIframe.getAttribute('src'); if (src) document.getElementById('youtubeUrl').value = src; }
+  const images = doc.querySelectorAll('img[src*="cdn.shopify.com"]');
+  const imageUrls = []; const seenUrls = new Set();
+  images.forEach(img => { let src = img.getAttribute('src') || ''; if (src.startsWith('//')) src = 'https:' + src; if (src.includes('_small') || src.includes('_thumb') || src.includes('32x32') || src.includes('64x64')) return; const baseUrl = src.split('?')[0]; if (!seenUrls.has(baseUrl) && src.includes('files/')) { seenUrls.add(baseUrl); imageUrls.push(src); } });
+  if (imageUrls.length > 0) {
+    const imageGrid = document.getElementById('imageGrid'); imageGrid.innerHTML = '';
+    imageUrls.forEach(url => { const div = document.createElement('div'); div.className = 'image-grid-item'; div.setAttribute('data-url', url); div.innerHTML = `<img src="${url}" onclick="toggleImageSelection(this.parentElement)"><div class="checkmark">✓</div>`; imageGrid.appendChild(div); });
+    document.getElementById('extractedImages').style.display = 'block';
+  }
+  const bodyText = doc.body?.textContent || '';
+  const detectedPoints = [];
+  const patterns = [
+    { regex: /17\s*インチ.*(?:PC|パソコン|ノート).*(?:収納|対応|OK)/i, text: '17インチのPC 収納OK' },
+    { regex: /15\s*インチ.*(?:PC|パソコン|ノート).*(?:収納|対応|OK)/i, text: '15インチのPC 収納OK' },
+    { regex: /13\s*インチ.*(?:PC|パソコン|ノート).*(?:収納|対応|OK)/i, text: '13インチのPC 収納OK' },
+    { regex: /A4.*(?:ファイル|サイズ).*(?:収納|対応|OK)/i, text: 'A4ファイル 収納OK' },
+    { regex: /ペットボトル.*(?:収納|ポケット|OK)/i, text: 'ペットボトル収納OK' },
+    { regex: /撥水/i, text: '撥水加工' }, { regex: /メッシュ.*ポケット/i, text: 'メッシュポケットで中身が見える' },
+    { regex: /2\s*段.*構造|二段.*構造|観音開き/i, text: '2段構造で整理しやすい' },
+    { regex: /視認性/i, text: '視認性に優れた設計' }, { regex: /軽量|軽い/i, text: '軽量設計' },
+    { regex: /保冷|保温/i, text: '保冷・保温機能付き' }, { regex: /自立/i, text: '自立する設計' },
+  ];
+  patterns.forEach(p => { if (p.regex.test(bodyText)) detectedPoints.push(p.text); });
+  const sizeMatch = bodyText.match(/(?:高さ|H)\s*[:：]?\s*(\d+)\s*(?:cm|㎝)?\s*[×x]\s*(?:横|幅|W)\s*[:：]?\s*(\d+)\s*(?:cm|㎝)?\s*[×x]\s*(?:マチ|奥行|D)\s*[:：]?\s*(\d+)/i);
+  if (sizeMatch) document.getElementById('size').value = `高さ${sizeMatch[1]}cm × 横${sizeMatch[2]}cm × マチ${sizeMatch[3]}cm`;
+  const capacityMatch = bodyText.match(/(\d+)\s*[Lℓリットル]/); if (capacityMatch) document.getElementById('capacity').value = capacityMatch[1] + 'L';
+  const weightMatch = bodyText.match(/(\d+)\s*[gグラム]/); if (weightMatch) document.getElementById('weight').value = weightMatch[1] + 'g';
+  if (detectedPoints.length > 0) {
+    const pointsList = document.getElementById('pointsList'); pointsList.innerHTML = '';
+    detectedPoints.forEach(point => { const label = document.createElement('label'); label.style.cssText = 'display: flex; align-items: center; margin-bottom: 8px; cursor: pointer;'; label.innerHTML = `<input type="checkbox" checked value="${point}" style="margin-right: 8px; width: 16px; height: 16px;">${point}`; pointsList.appendChild(label); });
+    document.getElementById('extractedPoints').style.display = 'block';
+  }
+  extractedCaptions = [];
+  doc.querySelectorAll('p, h2, h3, .caption, .description').forEach(p => { const text = p.textContent.trim(); if (text.length > 10 && text.length < 100 && !text.includes('Q：') && !text.includes('A：') && !extractedCaptions.includes(text)) extractedCaptions.push(text); });
+  extractedColors = [];
+  const colorMatches = bodyText.match(/(?:ブラック|ホワイト|ネイビー|グレー|ベージュ|ブラウン|ダークグレー|ライトグレー|チャコール|カーキ)(?:（内装[^）]+）)?/g);
+  if (colorMatches) colorMatches.forEach(c => { if (!extractedColors.includes(c)) extractedColors.push(c); });
+  extractedSizes = [];
+  [/(?:高さ|H)\s*[:：]?\s*\d+\s*(?:cm|㎝)?\s*[×x]\s*(?:横|幅|W)\s*[:：]?\s*\d+\s*(?:cm|㎝)?\s*[×x]\s*(?:マチ|奥行|D)\s*[:：]?\s*\d+\s*(?:cm|㎝)?/gi, /\d+\s*(?:cm|㎝)\s*[×x]\s*\d+\s*(?:cm|㎝)\s*[×x]\s*\d+\s*(?:cm|㎝)/gi].forEach(pattern => { const matches = bodyText.match(pattern); if (matches) matches.forEach(s => { const cleaned = s.trim(); if (!extractedSizes.includes(cleaned)) extractedSizes.push(cleaned); }); });
+  if (extractedCaptions.length > 0) { document.getElementById('captionsList').innerHTML = extractedCaptions.map(c => `<div style="padding: 4px 0; border-bottom: 1px solid #eee;">• ${c}</div>`).join(''); document.getElementById('extractedCaptionsDiv').style.display = 'block'; }
+  updatePreview();
+  alert('解析完了！\n・商品名: ' + (title ? '検出' : '未検出') + '\n・画像: ' + imageUrls.length + '件\n・商品ポイント: ' + detectedPoints.length + '件\n・キャプション候補: ' + extractedCaptions.length + '件\n・カラー候補: ' + extractedColors.length + '件');
+}
+
+function toggleImageSelection(item) { if (item.classList.contains('used')) return; item.classList.toggle('selected'); }
+
+function applySelectedImages(target) {
+  const selectedItems = document.querySelectorAll('#imageGrid .image-grid-item.selected');
+  if (selectedItems.length === 0) { alert('画像を選択してください'); return; }
+  selectedItems.forEach((item, index) => { const url = item.getAttribute('data-url'); if (target === 'detail') addDetailItemWithUrl(url, index === 0); else addSliderItemWithUrl(url, index === 0); item.classList.remove('selected'); item.classList.add('used'); });
+  updatePreview();
+  alert(selectedItems.length + '件の画像を追加しました。');
+}
+
+function addDetailItemWithUrl(url, showSuggest = false) {
+  const list = document.getElementById('productDetailList');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item'; item.draggable = true; item.ondragstart = dragStart; item.ondragover = dragOver; item.ondrop = function(e) { drop(e, 'productDetailList'); }; item.ondragend = dragEnd;
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><div class="image-item-wrapper"><div class="move-buttons"><button type="button" class="move-btn" onclick="moveItem(this, -1)">▲</button><button type="button" class="move-btn" onclick="moveItem(this, 1)">▼</button></div><img src="${url}" class="image-thumbnail" onerror="this.style.display='none'"><div class="image-inputs"><label>画像URL</label><input type="url" class="detail-img" value="${url}" oninput="updatePreview(); updateThumbnail(this, 'detail')"><label>キャプション <button type="button" class="auto-generate-btn" onclick="generateCaption(this)">✨ 自動生成</button></label><textarea class="detail-caption" placeholder="キャプションを入力" oninput="updatePreview()"></textarea></div></div>`;
+  list.appendChild(item);
+  if (showSuggest && extractedCaptions.length > 0) setTimeout(() => { const btn = item.querySelector('.auto-generate-btn'); if (btn) generateCaption(btn); }, 100);
+}
+
+function addSliderItemWithUrl(url, showSuggest = false) {
+  const list = document.getElementById('sliderList');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item'; item.draggable = true; item.ondragstart = dragStart; item.ondragover = dragOver; item.ondrop = function(e) { drop(e, 'sliderList'); }; item.ondragend = dragEnd;
+  item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><div class="image-item-wrapper"><div class="move-buttons"><button type="button" class="move-btn" onclick="moveItem(this, -1)">▲</button><button type="button" class="move-btn" onclick="moveItem(this, 1)">▼</button></div><img src="${url}" class="image-thumbnail" onerror="this.style.display='none'"><div class="image-inputs"><label>画像URL</label><input type="url" class="slider-img" value="${url}" oninput="updatePreview(); updateThumbnail(this, 'slider')"><label>キャプション <button type="button" class="auto-generate-btn" onclick="generateCaption(this)">✨ 自動生成</button></label><input type="text" class="slider-caption" placeholder="キャプションを入力" oninput="updatePreview()"></div></div>`;
+  list.appendChild(item);
+  if (showSuggest && extractedCaptions.length > 0) setTimeout(() => { const btn = item.querySelector('.auto-generate-btn'); if (btn) generateCaption(btn); }, 100);
+}
+
+function applySelectedPoints() {
+  const checkboxes = document.querySelectorAll('#pointsList input[type="checkbox"]:checked');
+  if (checkboxes.length === 0) { alert('ポイントを選択してください'); return; }
+  const bpCheckboxes = document.querySelectorAll('#beforePurchaseCheckboxes input[type="checkbox"]');
+  checkboxes.forEach(cb => { let found = false; bpCheckboxes.forEach(bpc => { if (bpc.value === cb.value) { bpc.checked = true; found = true; } }); if (!found) addBeforePurchaseItemWithValue(cb.value); });
+  updatePreview();
+  alert(checkboxes.length + '件反映しました');
+}
+
+function updateThumbnail(input, type) {
+  const url = input.value;
+  const wrapper = input.closest('.image-item-wrapper');
+  let thumbnail = wrapper.querySelector('.image-thumbnail');
+  let placeholder = wrapper.querySelector('.image-thumbnail-placeholder');
+  if (url && url.startsWith('http')) {
+    if (placeholder) { const img = document.createElement('img'); img.src = url; img.className = 'image-thumbnail'; img.onerror = function() { this.style.display = 'none'; }; placeholder.replaceWith(img); }
+    else if (thumbnail) { thumbnail.src = url; thumbnail.style.display = 'block'; }
+  } else { if (thumbnail) { const div = document.createElement('div'); div.className = 'image-thumbnail-placeholder'; div.innerHTML = '画像<br>プレビュー'; thumbnail.replaceWith(div); } }
+}
+
+function loadCreatedHTML() {
+  try {
+    const htmlSource = document.getElementById('editHtmlSource').value;
+    if (!htmlSource.trim()) { alert('HTMLコードを貼り付けてください'); return; }
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlSource, 'text/html');
+    resetForm();
+    const youtubeIframe = doc.querySelector('iframe[src*="youtube"]');
+    if (youtubeIframe) document.getElementById('youtubeUrl').value = youtubeIframe.getAttribute('src') || '';
+    const subtitle = doc.querySelector('.kabag-subtitle');
+    const category = doc.querySelector('.kabag-category');
+    const productNameEl = doc.querySelector('.kabag-product-name');
+    if (subtitle) document.getElementById('productSubtitle').value = subtitle.textContent.trim();
+    if (category) document.getElementById('productCategory').value = category.textContent.trim();
+    if (productNameEl) document.getElementById('productName').value = productNameEl.textContent.trim();
+    // レビューバナー読み込み
+    const reviewCards = doc.querySelectorAll('.kabag-review-card');
+    if (reviewCards.length > 0) {
+      const reviewList = document.getElementById('reviewBannerList');
+      reviewList.innerHTML = '';
+      reviewCards.forEach((card, idx) => {
+        const title = card.querySelector('p[style*="font-weight: bold"]')?.textContent.trim() || '';
+        const body = card.querySelector('p[style*="line-height: 1.8"]')?.textContent.trim() || '';
+        const tags = card.querySelector('p[style*="color: #aaa"]')?.textContent.trim() || '';
+        const caption = card.querySelector('.kabag-review-caption')?.textContent.trim() || '';
+        const item = document.createElement('div');
+        item.className = 'dynamic-item review-item';
+        const bestTag = idx === 0 ? '<span style="background: #E8960A; color: #fff; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px;">BEST REVIEW</span>' : '';
+        item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button>
+          <div style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">${bestTag}<span style="color: #E8960A; font-size: 13px;">★★★★★</span></div>
+          <label>レビュータイトル</label><input type="text" class="review-title" value="${title}" oninput="updatePreview()">
+          <label>レビュー本文</label><textarea class="review-body" oninput="updatePreview()">${body}</textarea>
+          <label>属性タグ（任意）</label><input type="text" class="review-tags" value="${tags}" oninput="updatePreview()">
+          <label>キャプション</label><input type="text" class="review-caption" value="${caption}" oninput="updatePreview()">`;
+        reviewList.appendChild(item);
+      });
+    }
+    // バナー画像読み込み
+    const bannerImgs = doc.querySelectorAll('.kabag-review-banner ~ div img[alt="バナー"]');
+    // TODO: バナー画像の読み込みは将来実装
+    
+    const acc1Content = doc.querySelector('#acc1 ~ .kabag-accordion-content');
+    if (acc1Content) {
+      const items = acc1Content.querySelectorAll('p');
+      const checkboxGroup = document.getElementById('beforePurchaseCheckboxes');
+      items.forEach(p => { const text = p.textContent.replace(/^☑️\s*/, '').trim(); const cb = checkboxGroup.querySelector(`input[value="${text}"]`); if (cb) cb.checked = true; else addBeforePurchaseItemWithValue(text); });
+    }
+    const acc2Content = doc.querySelector('#acc2 ~ .kabag-accordion-content');
+    if (acc2Content) {
+      const faqList = document.getElementById('faqList'); faqList.innerHTML = '';
+      acc2Content.querySelectorAll('p').forEach(p => {
+        const html = p.innerHTML; const qMatch = html.match(/Q：([^<]+)/); const aMatch = html.match(/A：(.+)$/);
+        if (qMatch && aMatch) { const item = document.createElement('div'); item.className = 'dynamic-item'; item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><label>質問</label><input type="text" class="faq-q" value="${qMatch[1].trim()}" oninput="updatePreview()"><label>回答</label><textarea class="faq-a" oninput="updatePreview()">${aMatch[1].trim()}</textarea>`; faqList.appendChild(item); }
+      });
+    }
+    const detailSections = doc.querySelectorAll('.kabag-image-section');
+    if (detailSections.length > 0) {
+      const detailList = document.getElementById('productDetailList'); detailList.innerHTML = '';
+      detailSections.forEach(section => { const img = section.querySelector('img'); const captionP = section.querySelector('p:not(.kabag-subtitle):not(.kabag-category):not(.kabag-product-name)'); const titleBlock = section.querySelector('.kabag-title-block'); if (img) { addDetailItemWithUrl(img.getAttribute('src') || '', false); if (captionP && !titleBlock) { const lastItem = detailList.lastElementChild; if (lastItem) lastItem.querySelector('.detail-caption').value = captionP.textContent.trim(); } } });
+    }
+    const sliderItemEls = doc.querySelectorAll('.kabag-slider-item');
+    if (sliderItemEls.length > 0) {
+      const sliderList = document.getElementById('sliderList'); sliderList.innerHTML = '';
+      sliderItemEls.forEach(item => { const img = item.querySelector('img'); const caption = item.querySelector('.kabag-slider-caption'); if (img) { addSliderItemWithUrl(img.getAttribute('src') || '', false); if (caption) { const lastItem = sliderList.lastElementChild; if (lastItem) lastItem.querySelector('.slider-caption').value = caption.textContent.trim(); } } });
+    }
+    const table = doc.querySelector('.tab2-content table');
+    if (table) {
+      table.querySelectorAll('tr').forEach(row => {
+        const label = row.querySelector('td:first-child')?.textContent.trim();
+        const value = row.querySelector('td:last-child')?.textContent.replace(/^　/, '').trim();
+        if (label && value) {
+          switch(label) { case '容量': document.getElementById('capacity').value = value; break; case '重さ': document.getElementById('weight').value = value; break; case 'サイズ': document.getElementById('size').value = value; break;
+            case '素材（本体）': setMaterialValue('materialMain', 'materialMainOther', value); break; case '素材（裏地）': setMaterialValue('materialLining', 'materialLiningOther', value); break;
+            case 'カラー': const colorList = document.getElementById('colorList'); colorList.innerHTML = ''; value.split(/\n/).forEach(c => { if (c.trim()) { const item = document.createElement('div'); item.className = 'dynamic-item color-item'; item.innerHTML = `<button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><input type="text" class="color-input" value="${c.trim()}" oninput="updatePreview()">`; colorList.appendChild(item); } }); break;
+            case '生産地': setProductionPlace(value); break; }
+        }
+      });
+    }
+    updatePreview();
+    alert('HTMLを読み込みました！');
+  } catch (e) { alert('エラー: ' + e.message); console.error(e); }
+}
+
+function setMaterialValue(selectId, otherId, value) {
+  const select = document.getElementById(selectId); const otherInput = document.getElementById(otherId); const otherDiv = document.getElementById('other' + selectId.charAt(0).toUpperCase() + selectId.slice(1));
+  let found = false; for (let option of select.options) { if (option.value === value) { select.value = value; found = true; break; } }
+  if (!found && value) { select.value = 'other'; otherInput.value = value; if (otherDiv) otherDiv.classList.add('active'); }
+}
+function setProductionPlace(value) {
+  const select = document.getElementById('productionPlace'); const otherInput = document.getElementById('productionPlaceOther'); const otherDiv = document.getElementById('otherProductionPlace');
+  let found = false; for (let option of select.options) { if (option.value === value) { select.value = value; found = true; break; } }
+  if (!found && value) { select.value = 'other'; otherInput.value = value; otherDiv.classList.add('active'); }
+}
+function resetForm() {
+  document.getElementById('productSubtitle').value = ''; document.getElementById('productCategory').value = ''; document.getElementById('productName').value = ''; document.getElementById('youtubeUrl').value = '';
+  document.querySelectorAll('#beforePurchaseCheckboxes input[type="checkbox"]').forEach(cb => { cb.checked = cb.value === '30日間返金保証‼️' || cb.value === '全国送料無料‼️'; });
+  document.getElementById('beforePurchaseList').innerHTML = '<p style="font-size: 0.85em; color: #666; margin: 0 0 8px 0;">その他の項目：</p>';
+  document.getElementById('faqList').innerHTML = ''; document.getElementById('productDetailList').innerHTML = ''; document.getElementById('sliderList').innerHTML = ''; document.getElementById('colorList').innerHTML = '';
+  document.getElementById('capacity').value = ''; document.getElementById('weight').value = ''; document.getElementById('size').value = ''; document.getElementById('materialMain').value = ''; document.getElementById('materialLining').value = ''; document.getElementById('productionPlace').value = '';
+  document.querySelectorAll('.other-input').forEach(div => div.classList.remove('active'));
+  // レビューバナーリセット
+  document.getElementById('reviewBannerList').innerHTML = `<div class="dynamic-item review-item"><button type="button" class="delete-btn" onclick="deleteItem(this)">×</button><div style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;"><span style="background: #E8960A; color: #fff; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px;">BEST REVIEW</span><span style="color: #E8960A; font-size: 13px;">★★★★★</span></div><label>レビュータイトル</label><input type="text" class="review-title" placeholder="例：何度もリピしてます" oninput="updatePreview()"><label>レビュー本文</label><textarea class="review-body" placeholder="例：とにかく使いやすい..." oninput="updatePreview()"></textarea><label>属性タグ（任意）</label><input type="text" class="review-tags" placeholder="例：実用品・普段使い｜自分用｜リピート" oninput="updatePreview()"><label>キャプション（青帯メッセージ）</label><input type="text" class="review-caption" placeholder="例：リピート続出！コンパクトなのに大容量" oninput="updatePreview()"></div>`;
+  document.getElementById('bannerImageList').innerHTML = '';
+}
+
+let draggedItem = null;
+function dragStart(e) { draggedItem = e.target.closest('.dynamic-item'); draggedItem.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+function dragOver(e) { e.preventDefault(); const item = e.target.closest('.dynamic-item'); if (item && item !== draggedItem) item.classList.add('drag-over'); }
+function dragEnd(e) { document.querySelectorAll('.dynamic-item').forEach(item => { item.classList.remove('dragging', 'drag-over'); }); draggedItem = null; }
+function drop(e, listId) {
+  e.preventDefault(); const dropTarget = e.target.closest('.dynamic-item'); const list = document.getElementById(listId);
+  if (dropTarget && draggedItem && dropTarget !== draggedItem) { const items = Array.from(list.children); const draggedIndex = items.indexOf(draggedItem); const dropIndex = items.indexOf(dropTarget); if (draggedIndex < dropIndex) dropTarget.after(draggedItem); else dropTarget.before(draggedItem); updatePreview(); }
+  document.querySelectorAll('.dynamic-item').forEach(item => { item.classList.remove('drag-over'); });
+}
+function moveItem(btn, direction) {
+  const item = btn.closest('.dynamic-item'); const list = item.parentElement; const items = Array.from(list.children); const index = items.indexOf(item);
+  if (direction === -1 && index > 0) list.insertBefore(item, items[index - 1]); else if (direction === 1 && index < items.length - 1) list.insertBefore(items[index + 1], item);
+  updatePreview();
+}
+</script>
+
+</body>
+</html>
