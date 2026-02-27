@@ -1,122 +1,123 @@
-<!-- ============================================
-     商品名 商品ページ
-     CSSのみでタブ/アコーディオン機能を実現
-     （JavaScript不要・Shopify商品説明欄用）
-     ============================================ -->
+🦛 KABAG HTML生成アプリ
+📥 データ読み込み
+既存ページから新規作成
+作成済みHTMLを編集
+商品ページで「右クリック」→「ページのソースを表示」→ 全選択してコピー → 下に貼り付け
+🔍 解析して読み込む
+基本情報
+サブタイトル（小さい文字）
+カテゴリー名（中サイズ）
+商品名（大きい文字）
+YouTube動画URL（任意）
+※埋め込みコードを貼り付けてもURLを自動抽出します
+⭐ レビューバナー（YouTube直下に表示）
+※Judge.meのベストレビューを3件まで入力。クリックでレビューウィジェットにジャンプします
+🔗 Judge.me APIからレビュー自動取得
+Shop Domain
+Public API Token
+商品URL or ハンドル
+※商品URLを貼り付けるとハンドルを自動抽出します
+⭐ ベストレビューを取得
+💾 設定保存
+×
+BEST REVIEW
+★★★★★
+レビュータイトル
+レビュー本文
+属性タグ（任意）
+キャプション（赤帯メッセージ）
++ レビューを追加
+🏆 クラファン実績・バナー画像（レビューバナー下に表示）
+※Makuake等のクラファン実績画像やプロモバナーを追加。複数追加・並び替え可能
 
-<style>
-/* ========== アコーディオン ========== */
-.kabag-accordion { border: 1px solid #e0e0e0; margin-bottom: -1px; }
-.kabag-accordion input[type="checkbox"] { display: none; }
-.kabag-accordion-label { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #fff; cursor: pointer; font-weight: bold; font-size: 14px; color: #333; }
-.kabag-accordion-label:hover { background: #f9f9f9; }
-.kabag-accordion-label::after { content: "▼"; font-size: 12px; transition: transform 0.3s; }
-.kabag-accordion input[type="checkbox"]:checked + .kabag-accordion-label::after { transform: rotate(180deg); }
-.kabag-accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; background: #fafafa; font-size: 14px; line-height: 1.8; color: #555; }
-.kabag-accordion input[type="checkbox"]:checked ~ .kabag-accordion-content { max-height: 1000px; padding: 20px; border-top: 1px solid #e0e0e0; }
-/* ========== 横タブ ========== */
-.kabag-tabs-wrapper { margin-top: 30px; }
-.kabag-tabs-wrapper input[type="radio"] { display: none; }
-.kabag-tabs-nav { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: stretch !important; justify-content: stretch !important; border-bottom: 2px solid #e0e0e0; width: 100%; margin: 0 !important; padding: 0 !important; }
-.kabag-tabs-nav label { flex: 1 1 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; padding: 14px 8px !important; margin: 0 !important; cursor: pointer; font-weight: bold; font-size: 14px; color: #888; border: none !important; border-bottom: 2px solid transparent !important; margin-bottom: -2px !important; transition: all 0.3s; min-height: 50px !important; box-sizing: border-box !important; line-height: 1.3 !important; background: transparent !important; }
-.kabag-tabs-nav label:hover { color: #333; }
-#kabag-tab1:checked ~ .kabag-tabs-nav label[for="kabag-tab1"],
-#kabag-tab2:checked ~ .kabag-tabs-nav label[for="kabag-tab2"] { color: #333; border-bottom: 2px solid #E8960A !important; }
-.kabag-tab-content { display: none; padding: 30px 0; }
-#kabag-tab1:checked ~ .kabag-tab-content.tab1-content,
-#kabag-tab2:checked ~ .kabag-tab-content.tab2-content { display: block; }
-/* ========== 画像セクション ========== */
-.kabag-image-section { text-align: center; margin-bottom: 40px; }
-.kabag-image-section img { max-width: 100%; }
-.kabag-image-section p { font-size: 1.1em; margin-top: 16px; color: #333; }
-/* ========== スライダー ========== */
-.kabag-slider { margin-top: 40px; position: relative; }
-.kabag-slider-title { text-align: center; font-size: 1.2em; font-weight: bold; margin-bottom: 20px; color: #333; }
-.kabag-slider-wrapper { position: relative; }
-.kabag-slider-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; background: rgba(0,0,0,0.45); color: #fff; border-radius: 50%; font-size: 1.2em; font-weight: bold; z-index: 10; pointer-events: none; display: flex; align-items: center; justify-content: center; line-height: 1; }
-.kabag-slider-arrow-left { left: 8px; }
-.kabag-slider-arrow-right { right: 8px; }
-.kabag-slider-container { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; gap: 0; padding: 0 24px; }
-.kabag-slider-container::-webkit-scrollbar { display: none; }
-.kabag-slider-item { flex: 0 0 88%; scroll-snap-align: center; overflow: hidden; display: flex; flex-direction: column; box-sizing: border-box; margin: 0 6px; border-radius: 8px; border: 1px solid #e0e0e0; }
-.kabag-slider-item img { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; object-position: center; display: block; background: #fff; }
-.kabag-slider-caption { text-align: center; padding: 12px 10px; font-size: 0.95em; color: #333; background: #fff; min-height: 80px; display: flex; align-items: center; justify-content: center; }
-/* ========== メインビジュアル ========== */
-.kabag-main-visual { margin-bottom: 50px; }
-.kabag-title-block { margin-top: 20px; }
-.kabag-subtitle { font-size: 0.9em; color: #666; margin: 0 0 8px 0; }
-.kabag-category { font-size: 1.3em; font-weight: bold; color: #333; margin: 0 0 4px 0; }
-.kabag-product-name { font-size: 1.8em; font-weight: bold; color: #333; margin: 0; }
-/* ========== レビューバナー ========== */
-.kabag-review-banner { padding: 30px 0 20px; border-bottom: 2px solid #E8960A; }
-.kabag-review-banner a { text-decoration: none; color: inherit; display: block; }
-.kabag-review-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 18px; margin-bottom: 14px; position: relative; }
-.kabag-review-card:last-child { margin-bottom: 0; }
-.kabag-review-caption { color: #fff; padding: 8px 14px; border-radius: 6px; margin-top: 12px; font-size: 12px; font-weight: bold; text-align: center; line-height: 1.5; }
-</style>
++ バナー画像を追加
+購入前に知っておきたいこと
 
-<!-- アコーディオン -->
-<div class="kabag-accordion">
-  <input type="checkbox" id="acc1" checked>
-  <label class="kabag-accordion-label" for="acc1">購入前に知っておきたいこと</label>
-  <div class="kabag-accordion-content">
-    <p>☑️ 30日間返金保証‼️</p>
-    <p>☑️ 全国送料無料‼️</p>
-  </div>
-</div>
+17インチのPC 収納OK
 
-<div class="kabag-accordion">
-  <input type="checkbox" id="acc2">
-  <label class="kabag-accordion-label" for="acc2">よくある質問</label>
-  <div class="kabag-accordion-content">
-    <p><strong>Q：収納できるパソコンのサイズについて教えてください。</strong><br>
-    A：15インチまで収納可能です。</p>
-    <p style="margin-top: 16px;"><strong>Q：雨に濡れても大丈夫ですか？</strong><br>
-    A：撥水加工の生地を使用しており、濡れにくい素材です。</p>
-    <p style="margin-top: 16px;"><strong>Q：洗濯はできますか？</strong><br>
-    A：洗濯はできません。</p>
-  </div>
-</div>
+15インチのPC 収納OK
 
-<div class="kabag-accordion">
-  <input type="checkbox" id="acc3">
-  <label class="kabag-accordion-label" for="acc3">30日間返金保証について</label>
-  <div class="kabag-accordion-content">
-    <p><strong>30日間返金保証の対象は「屋内試用のみ」となります。</strong><br>
-    返金をご希望の際は、商品到着後30日以内に【返金希望用紙】を同梱し、着払いにてご返送ください。</p>
-    <div style="background: #f0f8f0; padding: 12px; border-radius: 6px; margin: 16px 0;">
-      <p style="margin: 0 0 8px 0; color: #2e7d32;"><strong>✓ OK（返品対象）</strong></p>
-      <p style="margin: 0; font-size: 0.95em;">・室内での収納テスト・ポーチ確認<br>・鏡の前での背負い心地チェック<br>・床置きする場合は、シート等を敷いたうえで短時間の確認</p>
-    </div>
-    <div style="background: #fef0f0; padding: 12px; border-radius: 6px; margin: 16px 0;">
-      <p style="margin: 0 0 8px 0; color: #c62828;"><strong>✗ NG（返金対象外または減額）</strong></p>
-      <p style="margin: 0; font-size: 0.95em;">・屋外での持ち出し・使用（通勤・通学・買い物・旅行・撮影など）<br>・雨・雪・水濡れ、衣類や他製品からの色移り、圧迫による変形<br>・香水・お香・タバコ等のにおいの付着<br>・付属品（箱・タグ・説明書）の欠品・破損</p>
-    </div>
-    <p style="margin-top: 16px; font-size: 0.95em;"><strong>Q. 玄関先やベランダで背負い心地を確認しても大丈夫ですか？</strong><br>A. 屋内の範囲で、短時間であれば問題ありません。</p>
-    <p style="font-size: 0.95em;"><strong>Q. タグを一度外してしまっても大丈夫ですか？</strong><br>A. 商品の価値を大きく損なわない範囲であれば原則として受け付けます。ただし、タグは保管し、返品時に必ず同梱してください。</p>
-  </div>
-</div>
+13インチのPC 収納OK
 
-<!-- 横タブ -->
-<div class="kabag-tabs-wrapper">
-  <input type="radio" name="kabag-tabs" id="kabag-tab1" checked>
-  <input type="radio" name="kabag-tabs" id="kabag-tab2">
-  <div class="kabag-tabs-nav">
-    <label for="kabag-tab1">商品詳細</label>
-    <label for="kabag-tab2">サイズ・素材</label>
-  </div>
-  
-  <div class="kabag-tab-content tab1-content">
-  </div>
-  
-  <div class="kabag-tab-content tab2-content">
-    <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 30px;">
-    </table>
-    <p style="font-size: 0.9em; color: #888;">【注意事項】<br>・モニター環境により、実際の色味と異なる場合があります。<br>・光の当たり具合によっても、色味が違って見えることがあります。</p>
-  </div>
-</div>
+A4ファイル 収納OK
 
-<!-- Judge.me レビューウィジェット（タブ外） -->
-<div id="judgeme_product_reviews" style="margin-top: 30px;">
-  <div class="jdgm-widget jdgm-review-widget"></div>
-</div>
+ペットボトル収納OK
+
+30日間返金保証‼️
+
+全国送料無料‼️
+その他の項目：
++ 項目を追加
+よくある質問
+×
+質問
+収納できるパソコンのサイズについて教えてください。
+回答
+15インチまで収納可能です。
+×
+質問
+雨に濡れても大丈夫ですか？
+回答
+撥水加工の生地を使用しており、濡れにくい素材です。
+×
+質問
+洗濯はできますか？
+回答
+洗濯はできません。
++ 質問を追加
+商品詳細（画像＋キャプション）
+※ドラッグまたは▲▼ボタンで並び替え可能 / 1番目の画像はメインビジュアルになります
+× ▲ ▼ 画像
+プレビュー
+画像URL
+キャプション ✨ 自動生成
++ 画像を追加
+サイズ・素材
+※空欄の項目は表示されません
+容量
+重さ
+サイズ ✨ 自動生成
+素材（本体）
+      -- 選択してください --
+      ポリエステル
+      ナイロン
+      バリスティックナイロン
+      ハンプ
+      牛革
+      その他（直接入力）
+    
+素材（裏地）
+      -- 選択してください --
+      ポリエステル
+      ナイロン
+      リップストップナイロン
+      ハンプ
+      その他（直接入力）
+    
+カラー ✨ 自動生成
+※色ごとに1行ずつ入力してください
+×
+
++ カラーを追加
+生産地
+      -- 選択してください --
+      中国
+      カンボジア
+      日本
+      その他（直接入力）
+    
+その他の項目
+※自由に項目を追加できます
+
++ 項目を追加
+スライダー画像
+※ドラッグまたは▲▼ボタンで並び替え可能
+× ▲ ▼ 画像
+プレビュー
+画像URL
+キャプション ✨ 自動生成
++ 画像を追加
+📋 HTMLをコピー
+💾 ダウンロード
+📱 リアルタイムプレビュー
+コード表示
